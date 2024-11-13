@@ -176,7 +176,7 @@
     const launcher = d.createElement("div");
     launcher.className = "fini-widget-base fini-chat-launcher";
     launcher.innerHTML = `
-          <img src="C:/Users/SrijithV/Documents/IntellientActivity/Fini-Integration/Fini-Trial/widget/images/widget-logo.png" alt="Assistant">
+          <img src="C:/Users/SrijithV/Documents/IntellientActivity/Fini-Integration/Fini-Trial/widget/widget-logo.png" alt="Assistant">
       `;
 
     // Create chat container
@@ -184,7 +184,7 @@
     chatContainer.className = "fini-widget-base fini-chat-container";
     chatContainer.innerHTML = `
           <div class="fini-chat-header">
-              <img src="C:/Users/SrijithV/Documents/IntellientActivity/Fini-Integration/Fini-Trial/widget/images/widget-logo.png" alt="Assistant" class="fini-chat-avatar">
+              <img src="C:/Users/SrijithV/Documents/IntellientActivity/Fini-Integration/Fini-Trial/widget/widget-logo.png" alt="Assistant" class="fini-chat-avatar">
               <h3 style="margin: 0;">Ask Intelligent</h3>
               <div class="fini-chat-close">
                   <svg viewBox="0 0 24 24">
@@ -194,7 +194,7 @@
           </div>
           <div class="fini-chat-messages" id="finiChatMessages">
               <div class="fini-chat-message received">
-                  <img src="C:/Users/SrijithV/Documents/IntellientActivity/Fini-Integration/Fini-Trial/widget/images/widget-logo.png" alt="Assistant" class="fini-chat-avatar">
+                  <img src="C:/Users/SrijithV/Documents/IntellientActivity/Fini-Integration/Fini-Trial/widget/widget-logo.png" alt="Assistant" class="fini-chat-avatar">
                   <span>Welcome! How can I help you today?</span>
                   <div class="fini-timestamp">${new Date().toLocaleTimeString(
                     [],
@@ -247,7 +247,7 @@
       });
 
       messageDiv.innerHTML = `
-              ${isSent ? "" : '<img src="C:/Users/SrijithV/Documents/IntellientActivity/Fini-Integration/Fini-Trial/widget/images/widget-logo.png" alt="Assistant" class="fini-chat-avatar">'}
+              ${isSent ? "" : '<img src="C:/Users/SrijithV/Documents/IntellientActivity/Fini-Integration/Fini-Trial/widget/widget-logo.png" alt="Assistant" class="fini-chat-avatar">'}
               <span>${text}</span>
               <div class="fini-timestamp">${timestamp}</div>
           `;
