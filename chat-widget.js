@@ -4,7 +4,7 @@
   const mode = widgetOptions.mode || "widget";
   const widgetId = widgetOptions.widgetId || "default";
 
-  // Create widget styles with mode-specific variations
+  // Create widget styles with mode-specific variations -
   const styles = `
       /* Common Styles */
       .fini-widget-base {
