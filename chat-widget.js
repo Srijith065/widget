@@ -1,10 +1,18 @@
+// current code
+
 (function (w, d) {
   // Check if widget options exist and get mode
   const widgetOptions = w.finiWidgetOptions || { mode: "widget" };
   const mode = widgetOptions.mode || "widget";
   const widgetId = widgetOptions.widgetId || "default";
 
-  // Create widget styles with mode-specific variations -
+  // Azure OpenAI Configuration
+  const AZURE_ENDPOINT = 'https://iuat-aillm-ia7nf2g24v7ns.openai.azure.com';
+  const DEPLOYMENT_NAME = 'gpt-4-omni';
+  const API_VERSION = '2024-02-15-preview';
+  const API_KEY = '4ef40c4a5bad41fdb5544ca04de0365b';
+
+  // Create widget styles with mode-specific variations
   const styles = `
       /* Common Styles */
       .fini-widget-base {
@@ -76,7 +84,7 @@
       .fini-chat-close svg {
           width: 20px;
           height: 20px;
-          fill: white;
+          fill: black;
       }
       .fini-chat-messages {
           flex: 1;
@@ -95,13 +103,17 @@
           word-wrap: break-word;
           font-size: 14px;
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           gap: 8px;
       }
       .fini-chat-message .fini-chat-avatar {
           width: 30px;
           height: 30px;
           border-radius: 50%;
+          flex-shrink: 0;
+      }
+      .fini-message-content {
+          flex-grow: 1;
       }
       .fini-chat-message.received {
           background: white;
@@ -141,6 +153,10 @@
           align-items: center;
           justify-content: center;
       }
+      .fini-chat-input button:disabled {
+          background: #cccccc;
+          cursor: not-allowed;
+      }
       .fini-chat-input button svg {
           width: 20px;
           height: 20px;
@@ -152,6 +168,25 @@
           margin-top: 4px;
           text-align: right;
       }
+      .fini-typing-indicator {
+          display: flex;
+          gap: 4px;
+          padding: 8px;
+      }
+      .fini-typing-dot {
+          width: 8px;
+          height: 8px;
+          background: #90949c;
+          border-radius: 50%;
+          animation: typing-animation 1.4s infinite ease-in-out;
+      }
+      .fini-typing-dot:nth-child(1) { animation-delay: 0s; }
+      .fini-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+      .fini-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes typing-animation {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-5px); }
+      }
   `;
 
   // Inject styles
@@ -159,16 +194,71 @@
   styleSheet.textContent = styles;
   d.head.appendChild(styleSheet);
 
-  // Create widget based on mode
-  switch (mode) {
-    case "widget":
-      createChatWidget();
-      break;
-    case "searchbar":
-      createSearchBar();
-      break;
-    default:
-      console.warn("Invalid widget mode specified");
+  async function streamFromAzureOpenAI(userMessage, messageElement) {
+    const url = `${AZURE_ENDPOINT}/openai/deployments/${DEPLOYMENT_NAME}/chat/completions?api-version=${API_VERSION}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': API_KEY
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "system",
+              content: [{
+                type: "text",
+                text: "You are an AI assistant that helps people find information."
+              }]
+            },
+            {
+              role: "user",
+              content: userMessage
+            }
+          ],
+          temperature: 0.7,
+          top_p: 0.95,
+          max_tokens: 800
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const jsonResponse = await response.json();
+      const contentSpan = messageElement.querySelector('.fini-message-content');
+      
+      if (jsonResponse.choices && jsonResponse.choices[0]?.message?.content) {
+        const content = jsonResponse.choices[0].message.content;
+        if (contentSpan) {
+          // Simulate streaming effect for better UX
+          let displayedContent = '';
+          const contentArray = content.split('');
+          
+          for (const char of contentArray) {
+            displayedContent += char;
+            contentSpan.textContent = displayedContent;
+            await new Promise(resolve => setTimeout(resolve, 20)); // Adjust timing as needed
+            
+            // Scroll to bottom as new content arrives
+            const messagesContainer = document.getElementById('finiChatMessages');
+            if (messagesContainer) {
+              messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+          }
+        }
+      } else {
+        throw new Error('No content in response');
+      }
+
+    } catch (error) {
+      console.error('Error with request:', error);
+      messageElement.querySelector('.fini-message-content').textContent = 
+        'Sorry, there was an error processing your request. Please try again later.';
+    }
   }
 
   function createChatWidget() {
@@ -176,41 +266,38 @@
     const launcher = d.createElement("div");
     launcher.className = "fini-widget-base fini-chat-launcher";
     launcher.innerHTML = `
-          <img src="C:/Users/SrijithV/Documents/IntellientActivity/Fini-Integration/Fini-Trial/widget/widget-logo.png" alt="Assistant">
-      `;
+      <img src="widget-logo.png" alt="Assistant">
+    `;
 
     // Create chat container
     const chatContainer = d.createElement("div");
     chatContainer.className = "fini-widget-base fini-chat-container";
     chatContainer.innerHTML = `
-          <div class="fini-chat-header">
-              <img src="C:/Users/SrijithV/Documents/IntellientActivity/Fini-Integration/Fini-Trial/widget/widget-logo.png" alt="Assistant" class="fini-chat-avatar">
-              <h3 style="margin: 0;">Ask Intelligent</h3>
-              <div class="fini-chat-close">
-                  <svg viewBox="0 0 24 24">
-                      <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
-                  </svg>
-              </div>
-          </div>
-          <div class="fini-chat-messages" id="finiChatMessages">
-              <div class="fini-chat-message received">
-                  <img src="C:/Users/SrijithV/Documents/IntellientActivity/Fini-Integration/Fini-Trial/widget/widget-logo.png" alt="Assistant" class="fini-chat-avatar">
-                  <span>Welcome! How can I help you today?</span>
-                  <div class="fini-timestamp">${new Date().toLocaleTimeString(
-                    [],
-                    { hour: "numeric", minute: "2-digit" }
-                  )}</div>
-              </div>
-          </div>
-          <div class="fini-chat-input">
-              <input type="text" id="finiChatInput" placeholder="Type a message...">
-              <button id="finiChatSend">
-                  <svg viewBox="0 0 24 24">
-                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                  </svg>
-              </button>
-          </div>
-      `;
+      <div class="fini-chat-header">
+        <img src="widget-logo.png" alt="Assistant" class="fini-chat-avatar">
+        <h3 style="margin: 0;">Ask Intelligent</h3>
+        <div class="fini-chat-close">
+          <svg viewBox="0 0 24 24">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
+          </svg>
+        </div>
+      </div>
+      <div class="fini-chat-messages" id="finiChatMessages">
+        <div class="fini-chat-message received">
+          <img src="widget-logo.png" alt="Assistant" class="fini-chat-avatar">
+          <div class="fini-message-content">Welcome! How can I help you today?</div>
+          <div class="fini-timestamp">${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</div>
+        </div>
+      </div>
+      <div class="fini-chat-input">
+        <input type="text" id="finiChatInput" placeholder="Type a message...">
+        <button id="finiChatSend">
+          <svg viewBox="0 0 24 24">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+    `;
 
     // Add elements to page
     d.body.appendChild(launcher);
@@ -237,9 +324,7 @@
 
     function addMessage(text, isSent) {
       const messageDiv = d.createElement("div");
-      messageDiv.className = `fini-chat-message ${
-        isSent ? "sent" : "received"
-      }`;
+      messageDiv.className = `fini-chat-message ${isSent ? "sent" : "received"}`;
 
       const timestamp = new Date().toLocaleTimeString([], {
         hour: "numeric",
@@ -247,40 +332,59 @@
       });
 
       messageDiv.innerHTML = `
-              ${isSent ? "" : '<img src="C:/Users/SrijithV/Documents/IntellientActivity/Fini-Integration/Fini-Trial/widget/widget-logo.png" alt="Assistant" class="fini-chat-avatar">'}
-              <span>${text}</span>
-              <div class="fini-timestamp">${timestamp}</div>
-          `;
+        ${isSent ? "" : '<img src="widget-logo.png" alt="Assistant" class="fini-chat-avatar">'}
+        <div class="fini-message-content">${text}</div>
+        <div class="fini-timestamp">${timestamp}</div>
+      `;
 
       messageContainer.appendChild(messageDiv);
       messageContainer.scrollTop = messageContainer.scrollHeight;
+      return messageDiv;
     }
 
-    function sendMessage() {
+    async function sendMessage() {
       const message = messageInput.value.trim();
       if (message) {
+        // Disable input and button while processing
+        messageInput.disabled = true;
+        sendButton.disabled = true;
+
+        // Add user message
         addMessage(message, true);
         messageInput.value = "";
 
-        // Simulate response
-        setTimeout(() => {
-          const responses = [
-            "Thanks for your message!",
-            "I got your message 😊",
-            "Message received, thank you!",
-            "Thanks for reaching out!",
-            "Got it, thanks!",
-          ];
-          const randomResponse =
-            responses[Math.floor(Math.random() * responses.length)];
-          addMessage(randomResponse, false);
-        }, 1000);
+        // Add assistant message with typing indicator
+        const assistantMessage = addMessage('', false);
+        const typingIndicator = d.createElement('div');
+        typingIndicator.className = 'fini-typing-indicator';
+        typingIndicator.innerHTML = `
+          <div class="fini-typing-dot"></div>
+          <div class="fini-typing-dot"></div>
+          <div class="fini-typing-dot"></div>
+        `;
+        assistantMessage.querySelector('.fini-message-content').appendChild(typingIndicator);
+
+        // Stream the response
+        await streamFromAzureOpenAI(message, assistantMessage);
+
+        // Remove typing indicator
+        const content = assistantMessage.querySelector('.fini-message-content');
+        const indicator = content.querySelector('.fini-typing-indicator');
+        if (indicator) {
+          content.removeChild(indicator);
+        }
+
+        // Re-enable input and button
+        messageInput.disabled = false;
+        sendButton.disabled = false;
+        messageInput.focus();
       }
     }
 
     sendButton.addEventListener("click", sendMessage);
     messageInput.addEventListener("keypress", function (e) {
-      if (e.key === "Enter") {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
         sendMessage();
       }
     });
@@ -288,5 +392,17 @@
 
   function createSearchBar() {
     // Search bar implementation remains the same
+  }
+
+  // Create widget based on mode
+  switch (mode) {
+    case "widget":
+      createChatWidget();
+      break;
+    case "searchbar":
+      createSearchBar();
+      break;
+    default:
+      console.warn("Invalid widget mode specified");
   }
 })(window, document);
