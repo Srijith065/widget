@@ -327,7 +327,7 @@
     chatContainer.innerHTML = `
       <div class="fini-chat-header">
         <img src="${validatedLogo}" alt="Assistant" class="fini-chat-avatar">
-        <h3 style="margin: 0;">Ask Intelligent</h3>
+        <h3 style="margin: 0;">Ask Intellient</h3>
         <div class="fini-chat-close">
           <svg viewBox="0 0 24 24">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
