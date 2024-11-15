@@ -11,7 +11,7 @@
   const API_KEY = '4ef40c4a5bad41fdb5544ca04de0365b';
 
   // Default branding
-  const DEFAULT_LOGO = 'https://graphicsfamily.com/wp-content/uploads/edd/2021/08/Free-Editable-Abstract-Logo-Design-PNG-Transparent-2048x2048.png';
+  const DEFAULT_LOGO = 'https://delightful-beach-07c9da51e.5.azurestaticapps.net/widget-logo.png';
   const DEFAULT_THEME = {
     primaryColor: '#0084ff',
     secondaryColor: '#f0f2f5',
