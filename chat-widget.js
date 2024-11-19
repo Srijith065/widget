@@ -253,13 +253,15 @@
     });
   }
 
+  // Replace the streamFromAzureOpenAI function with this:
   async function streamFromAzureOpenAI(userMessage, messageElement) {
     try {
-      const response = await fetch(`${AZURE_ENDPOINT}/openai/deployments/${DEPLOYMENT_NAME}/chat/completions?api-version=${API_VERSION}`, {
+      const response = await fetch('http://localhost:3000/api/azure-openai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'api-key': API_KEY
+          'api-key': API_KEY,
+          'Origin': window.location.origin
         },
         body: JSON.stringify({
           messages: [
@@ -272,7 +274,10 @@
             },
             {
               role: "user",
-              content: userMessage
+              content: [{
+                type: "text",
+                text: userMessage
+              }]
             }
           ],
           temperature: 0.7,
@@ -280,11 +285,11 @@
           max_tokens: 800
         })
       });
-
+  
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-
+  
       const data = await response.json();
       const contentSpan = messageElement.querySelector('.fini-message-content');
       
@@ -298,7 +303,7 @@
           contentSpan.textContent = displayedContent;
           await new Promise(resolve => setTimeout(resolve, 20));
           
-          const messagesContainer = d.getElementById('finiChatMessages');
+          const messagesContainer = document.getElementById('finiChatMessages');
           if (messagesContainer) {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
           }
