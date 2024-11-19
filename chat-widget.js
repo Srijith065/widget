@@ -260,6 +260,7 @@
     });
   }
  
+  // Updated code
   async function streamFromAzureOpenAI(userMessage, messageElement) {
     try {
       const response = await fetch("http://localhost:3000/api/link-widget", {
