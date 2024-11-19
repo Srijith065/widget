@@ -263,6 +263,8 @@
   // Updated code - Intellient UAT
   async function streamFromAzureOpenAI(userMessage, messageElement) {
     try {
+      // https://intellientuat.azurewebsites.net/api/link-widget
+      // http://localhost:3000/api/link-widget
       const response = await fetch("https://intellientuat.azurewebsites.net/api/link-widget", {
         method: "POST",
         headers: {
