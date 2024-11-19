@@ -4,12 +4,6 @@
   const mode = widgetOptions.mode || "widget";
   const widgetId = widgetOptions.widgetId || "default";
  
-  // Azure OpenAI Configuration
-  const AZURE_ENDPOINT = "https://iuat-aillm-ia7nf2g24v7ns.openai.azure.com";
-  const DEPLOYMENT_NAME = "gpt-4-omni";
-  const API_VERSION = "2024-02-15-preview";
-  const API_KEY = "4ef40c4a5bad41fdb5544ca04de0365b";
- 
   // Default branding
   const DEFAULT_LOGO =
     "https://delightful-beach-07c9da51e.5.azurestaticapps.net/widget-logo.png"; // Default Logo - Intellient
