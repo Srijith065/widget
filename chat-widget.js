@@ -254,7 +254,7 @@
     });
   }
  
-  // Updated code - Intellient UAT - Accessible to public site
+  // Interacts with Intellient UAT - Accessible to public site
   async function streamFromAzureOpenAI(userMessage, messageElement) {
     try {
       // https://intellientuat.azurewebsites.net/api/link-widget
