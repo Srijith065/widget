@@ -260,7 +260,7 @@
     });
   }
  
-  // Updated code
+  // Updated code - Intellient UAT
   async function streamFromAzureOpenAI(userMessage, messageElement) {
     try {
       const response = await fetch("https://intellientuat.azurewebsites.net/api/link-widget", {
