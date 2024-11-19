@@ -260,7 +260,7 @@
     });
   }
  
-  // Updated code - Intellient UAT
+  // Updated code - Intellient UAT - Accessible to public site
   async function streamFromAzureOpenAI(userMessage, messageElement) {
     try {
       // https://intellientuat.azurewebsites.net/api/link-widget
