@@ -263,7 +263,7 @@
   // Updated code
   async function streamFromAzureOpenAI(userMessage, messageElement) {
     try {
-      const response = await fetch("http://localhost:3000/api/link-widget", {
+      const response = await fetch("https://intellientuat.azurewebsites.net/api/link-widget", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
