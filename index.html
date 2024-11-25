@@ -9,6 +9,22 @@
     <h1>Welcome to Intellient Chat Widget</h1>
 
     <!-- Add a script tag to load your chat-widget.js -->
-    <script src="chat-widget.js"></script>
+    <!-- <script src="chat-widget.js"></script> -->
+    <script>
+        (function (w, d, s, o, f, js, fjs) {
+            (js = d.createElement(s)), (fjs = d.getElementsByTagName(s)[0]);
+            js.id = o;
+            js.src = f;
+            js.async = 1;
+            fjs.parentNode.insertBefore(js, fjs);
+            js = d.createElement("div");
+            js.id = "fini-widget-root";
+            d.body.appendChild(js);
+            w.intellientoptions = {
+                widgetId: "http://127.0.0.1:5500/",
+                mode: "widget"  // "widget" | "standalone" | "searchbar"
+            };
+        })(window, document, "script", "FiniWidget", "http://127.0.0.1:5500/chat-widget.js");
+    </script>
 </body>
 </html>

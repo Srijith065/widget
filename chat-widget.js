@@ -1,8 +1,13 @@
 (function (w, d) {
   // Get widget options from the embed script
-  const widgetOptions = w.finiWidgetOptions || { mode: "widget" };
+  const widgetOptions = w.intellientoptions || { mode: "widget" };
   const mode = widgetOptions.mode || "widget";
   const widgetId = widgetOptions.widgetId || "default";
+
+  if (widgetId !== window.location.href) {
+    console.error("Widget ID is required but not provided.");
+    return; // Prevent further execution
+  }
  
   // Default branding
   const DEFAULT_LOGO =
@@ -255,52 +260,53 @@
   }
  
   // Interacts with Intellient UAT - Accessible to public site
-  async function streamFromAzureOpenAI(userMessage, messageElement) {
-    try {
-      // https://intellientuat.azurewebsites.net/api/link-widget
-      // http://localhost:3000/api/link-widget
-      const response = await fetch("https://intellientuat.azurewebsites.net/api/link-widget", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userMessage, // Add the data you want to pos
-        }),
-      });
-      console.log(response);
- 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
- 
-      const data = await response.json();
-      const contentSpan = messageElement.querySelector(".fini-message-content");
- 
-      if (data.choices && data.choices[0]?.message?.content) {
-        const content = data.choices[0].message.content;
-        let displayedContent = "";
-        const contentArray = content.split("");
- 
-        for (const char of contentArray) {
-          displayedContent += char;
-          contentSpan.textContent = displayedContent;
-          await new Promise((resolve) => setTimeout(resolve, 20));
- 
-          const messagesContainer = d.getElementById("finiChatMessages");
-          if (messagesContainer) {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-          }
-        }
-      } else {
-        throw new Error("No content in response");
-      }
-    } catch (error) {
-      console.error("Error:", error);
-      messageElement.querySelector(".fini-message-content").textContent =
-        "Sorry, there was an error processing your request. Please try again later.";
+// Interacts with Intellient UAT - Accessible to public site
+async function streamFromAzureOpenAI(userMessage, messageElement) {
+  try {
+    // https://intellientuat.azurewebsites.net/api/link-widget
+    // http://localhost:3000/api/link-widget
+    const response = await fetch("https://widget-appbased-auth.azurewebsites.net/api/link-widget", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        userMessage, // Add the data you want to pos
+      }),
+    });
+    console.log(response);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+
+    const data = await response.json();
+    const contentSpan = messageElement.querySelector(".fini-message-content");
+
+    if (data.choices && data.choices[0]?.message?.content) {
+      const content = data.choices[0].message.content;
+      let displayedContent = "";
+      const contentArray = content.split("");
+
+      for (const char of contentArray) {
+        displayedContent += char;
+        contentSpan.textContent = displayedContent;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        const messagesContainer = d.getElementById("finiChatMessages");
+        if (messagesContainer) {
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+      }
+    } else {
+      throw new Error("No content in response");
+    }
+  } catch (error) {
+    console.error("Error:", error);
+    messageElement.querySelector(".fini-message-content").textContent =
+      "Sorry, there was an error processing your request. Please try again later.";
   }
+}
  
   async function createChatWidget() {
     const validatedLogo = await validateLogo(branding.logo);
