@@ -512,7 +512,7 @@
         // Add assistant message
         const assistantMessage = addMessage("", false);
         console.log("assistantMessage", assistantMessage);
-        console.log("accounts", accounts);
+        // console.log("accounts", accounts);
 
         if (checkLoginStatus()) {
           await streamFromAzureOpenAI(
