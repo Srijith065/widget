@@ -1,35 +1,39 @@
-name: Deploy Static Site to Azure Web App
+name: Deploy Chat Widget to Azure
 
 on:
   push:
     branches:
-      - chatWidgetWebApp  # Replace with your branch name
+      - main  # or your primary branch
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Package Static Site
-        run: |
-          zip -r static-site.zip \
-            ./index.html \
-            ./chat-widget.js \
-            ./server.js \
-            ./web.config \
-            ./package.json
-
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Deploy Static Site
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: ${{ secrets.AZURE_APP_SERVICE_NAME }}
-          package: static-site.zip
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+    
+    - name: Install Dependencies
+      run: npm install
+    
+    - name: Create Deployment Package
+      run: |
+        zip -r deploy.zip . \
+        -x '*.git*' \
+        -x 'node_modules/.cache*'
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ secrets.AZURE_APP_SERVICE_NAME }}
+        package: deploy.zip
