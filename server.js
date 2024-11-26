@@ -2,12 +2,12 @@ const express = require('express');
 const path = require('path');
 const app = express();
 
-// Serve static files from the root directory (if your files are not inside a folder like 'public')
+// Ensure static files are served from the correct directory
 app.use(express.static(path.join(__dirname)));
 
-// Serve the index.html file for the root URL
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));  // Ensure it's pointing to the correct location of index.html
+// Serve index.html for the root URL and all routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Listen on the specified port

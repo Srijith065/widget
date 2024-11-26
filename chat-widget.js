@@ -434,9 +434,22 @@
     container.scrollTop = container.scrollHeight;
     return messageDiv;
   }
+
+    // Modify the initialization to ensure it runs after DOM is fully loaded
+    function init() {
+      if (d.readyState === 'loading') {
+        d.addEventListener('DOMContentLoaded', createChatWidget);
+      } else {
+        createChatWidget();
+      }
+    }
  
   // Initialize based on mode
-  if (mode === "widget") {
-    createChatWidget();
-  }
+  // if (mode === "widget") {
+  //   createChatWidget();
+  // }
+    // Initialize based on mode
+    if (mode === "widget") {
+      init();
+    }
 })(window, document);
