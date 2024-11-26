@@ -15,7 +15,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Package Static Site
-        run: zip -r static-site.zip ./index.html ./chat-widget.js ./server.js ./web.config  
+        run: |
+          zip -r static-site.zip \
+            ./index.html \
+            ./chat-widget.js \
+            ./server.js \
+            ./web.config \
+            ./package.json
 
       - name: Azure Login
         uses: azure/login@v1
@@ -27,4 +33,3 @@ jobs:
         with:
           app-name: ${{ secrets.AZURE_APP_SERVICE_NAME }}
           package: static-site.zip
-</anArtifact>
