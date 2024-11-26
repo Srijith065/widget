@@ -11,24 +11,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the repository
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Step 2: Package the static site
-      # Ensure we're only zipping files that need to be deployed
       - name: Package Static Site
-        run: zip -r static-site.zip ./index.html ./chat-widget.js ./server.js
+        run: zip -r static-site.zip ./index.html ./chat-widget.js ./server.js ./web.config ./package.json
 
-      # Step 3: Login to Azure
       - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Step 4: Deploy the static site to Azure Web App
       - name: Deploy Static Site
         uses: azure/webapps-deploy@v2
         with:
-          app-name: ${{ secrets.AZURE_APP_SERVICE_NAME }}  # Azure Web App name
+          app-name: ${{ secrets.AZURE_APP_SERVICE_NAME }}
           package: static-site.zip
+</anArtifact>
