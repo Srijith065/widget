@@ -1,0 +1,22 @@
+{
+    "name": "chat-widget-webapp",
+    "version": "1.0.0",
+    "description": "A simple app to serve the chat widget",
+    "main": "server.js",
+    "scripts": {
+      "start": "node server.js"
+    },
+    "dependencies": {
+      "express": "^4.17.1"
+    },
+    "engines": {
+      "node": "14.x"
+    },
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/your-repo/chat-widget-webapp.git"
+    },
+    "author": "",
+    "license": "ISC"
+  }
+  
