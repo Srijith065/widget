@@ -3,7 +3,7 @@ name: Deploy Chat Widget to Azure
 on:
   push:
     branches:
-      - main  # or your primary branch
+      - chatWidgetWebApp  # or your primary branch
   workflow_dispatch:
 
 jobs:
