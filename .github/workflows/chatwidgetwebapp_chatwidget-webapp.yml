@@ -1,0 +1,34 @@
+name: Deploy Static Site to Azure Web App
+
+on:
+  push:
+    branches:
+      - chatWidgetWebApp # Replace with your branch name
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Step 2: Package the static site
+      - name: Package Static Site
+        run: zip -r static-site.zip ./*
+
+      # Step 3: Login to Azure
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Step 4: Deploy the static site to Azure Web App
+      - name: Deploy Static Site
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ secrets.AZURE_APP_SERVICE_NAME }}  # Azure Web App name
+          package: static-site.zip
+
