@@ -306,7 +306,7 @@
   async function persona() {
     try {
       const response = await fetch(
-        "intellientuat.azurewebsites.net/api/link-widget/intellibots",
+        "https://intellientuat.azurewebsites.net/api/link-widget/intellibots",
         {
           method: "GET",
         }
@@ -340,7 +340,7 @@
 
     try {
       const response = await fetch(
-        "intellientuat.azurewebsites.net/api/link-widget",
+        "https://intellientuat.azurewebsites.net/api/link-widget",
         {
           method: "POST",
           body: JSON.stringify({
