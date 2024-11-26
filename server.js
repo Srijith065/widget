@@ -1,47 +1,69 @@
 const express = require('express');
 const path = require('path');
-const os = require('os');
+const fs = require('fs').promises;
 
 const app = express();
 
-// Enhanced logging for diagnostics
-console.log('Server Startup Diagnostics:');
-console.log('Current Directory:', __dirname);
-console.log('Absolute Path to index.html:', path.resolve(__dirname, 'index.html'));
-console.log('Files in Directory:', require('fs').readdirSync(__dirname));
-console.log('Node Version:', process.version);
-console.log('Environment:', process.env.NODE_ENV);
+// Extensive logging and file system checks
+async function logFileSystemDetails() {
+  try {
+    console.log('Detailed File System Diagnostics:');
+    console.log('Current Working Directory:', process.cwd());
+    console.log('__dirname:', __dirname);
 
-// Middleware for logging requests
+    // List files in current directory
+    const files = await fs.readdir(process.cwd());
+    console.log('Files in current directory:', files);
+
+    // Check specific file existence
+    const checkFiles = ['index.html', 'server.js', 'chat-widget.js', 'web.config'];
+    for (const file of checkFiles) {
+      try {
+        await fs.access(path.join(process.cwd(), file));
+        console.log(`✓ ${file} exists`);
+      } catch {
+        console.log(`✗ ${file} does not exist`);
+      }
+    }
+  } catch (error) {
+    console.error('Error checking file system:', error);
+  }
+}
+
+// Middleware for request logging
 app.use((req, res, next) => {
-  console.log(`Incoming Request: ${req.method} ${req.url}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
 
-// Serve static files with explicit options
-app.use(express.static(__dirname, {
-  dotfiles: 'ignore',
-  extensions: ['html', 'htm', 'js'],
-  setHeaders: (res, path) => {
-    if (path.endsWith('.html')) {
-      res.set('Cache-Control', 'no-cache');
-    }
-  }
-}));
+// Serve static files with comprehensive logging
+app.use((req, res, next) => {
+  const staticPath = path.join(process.cwd());
+  console.log(`Attempting to serve static files from: ${staticPath}`);
+  express.static(staticPath)(req, res, next);
+});
 
-// Primary route handler
-app.get('*', (req, res) => {
-  console.log(`Catch-all route hit for: ${req.url}`);
-  
-  const indexPath = path.join(__dirname, 'index.html');
-  console.log(`Attempting to serve index.html from: ${indexPath}`);
-  
-  res.sendFile(indexPath, (err) => {
-    if (err) {
-      console.error('Error serving index.html:', err);
-      res.status(500).send('Error loading index.html');
-    }
-  });
+// Comprehensive route handler
+app.get('*', async (req, res) => {
+  try {
+    const indexPath = path.join(process.cwd(), 'index.html');
+    console.log(`Attempting to serve index.html from: ${indexPath}`);
+
+    // Check file existence before sending
+    await fs.access(indexPath);
+    
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        console.error('Error sending index.html:', err);
+        res.status(500).send(`Server error: ${err.message}`);
+      } else {
+        console.log(`Successfully served index.html for ${req.url}`);
+      }
+    });
+  } catch (error) {
+    console.error('Index.html serving error:', error);
+    res.status(404).send('File not found');
+  }
 });
 
 // Error handling middleware
@@ -53,19 +75,14 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Flexible port binding
-const port = process.env.PORT || process.env.WEBSITE_PORT || 8080;
+// Server initialization with logging
+const port = process.env.PORT || 8080;
 
-const server = app.listen(port, () => {
+// Log file system details on startup
+logFileSystemDetails();
+
+app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  console.log(`Server accessible at: http://localhost:${port}`);
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down gracefully');
-  server.close(() => {
-    console.log('Process terminated');
-    process.exit(0);
-  });
+  console.log(`Server start time: ${new Date().toISOString()}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });

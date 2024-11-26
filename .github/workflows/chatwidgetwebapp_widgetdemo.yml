@@ -3,7 +3,7 @@ name: Deploy Chat Widget to Azure
 on:
   push:
     branches:
-      - main  # or your primary branch
+      - chatWidgetWebApp  # or your primary branch
   workflow_dispatch:
 
 jobs:
@@ -12,6 +12,11 @@ jobs:
     
     steps:
     - uses: actions/checkout@v3
+    
+    - name: Debug - List Files
+      run: |
+        pwd
+        ls -la
     
     - name: Use Node.js
       uses: actions/setup-node@v3
@@ -26,6 +31,10 @@ jobs:
         zip -r deploy.zip . \
         -x '*.git*' \
         -x 'node_modules/.cache*'
+    
+    - name: Debug - Verify Deployment Package
+      run: |
+        unzip -l deploy.zip
     
     - name: Azure Login
       uses: azure/login@v1
