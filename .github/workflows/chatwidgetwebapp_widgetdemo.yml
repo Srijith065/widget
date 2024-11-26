@@ -1,9 +1,9 @@
-name: Deploy Node.js App to Azure Web App
+name: Deploy Static Site to Azure Web App
 
 on:
   push:
     branches:
-      - chatWidgetWebApp # Replace with your branch name
+      - chatWidgetWebApp  # Replace with your branch name
   workflow_dispatch:
 
 jobs:
@@ -15,30 +15,20 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Step 2: Set up Node.js
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'  # Ensure you're using the correct Node version
+      # Step 2: Package the static site
+      # Ensure we're only zipping files that need to be deployed
+      - name: Package Static Site
+        run: zip -r static-site.zip ./index.html ./chat-widget.js ./server.js
 
-      # Step 3: Install dependencies
-      - name: Install Dependencies
-        run: |
-          npm install
-
-      # Step 4: Build/Package the Node.js app (if needed)
-      # If you're not doing any build steps (e.g., React/Next.js build), this can be skipped
-      # run: npm run build # Uncomment if you need to run a build command
-
-      # Step 5: Login to Azure
+      # Step 3: Login to Azure
       - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      # Step 6: Deploy the app to Azure Web App
-      - name: Deploy Node.js App to Azure
+      # Step 4: Deploy the static site to Azure Web App
+      - name: Deploy Static Site
         uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ secrets.AZURE_APP_SERVICE_NAME }}  # Azure Web App name
-          package: . # Deploy everything in the root folder (including server.js and package.json)
+          package: static-site.zip
