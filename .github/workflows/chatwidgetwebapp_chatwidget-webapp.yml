@@ -3,7 +3,7 @@ name: Deploy Static Site to Azure Web App
 on:
   push:
     branches:
-      - main # Replace with your branch name, if not "main"
+      - chatWidgetWebApp # Replace with your branch name, if not "main"
   workflow_dispatch:
  
 jobs:
