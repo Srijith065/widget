@@ -380,41 +380,45 @@ let abortController;
   }
 
   // New function to scrape website content
-  async function scrapeWebsiteContent(url) {
+   // Enhanced website content scraping function
+   async function scrapeWebsiteContent(url) {
     try {
-      // Basic implementation of website content scraping
-      const response = await fetch(
-        `https://intellientuat.azurewebsites.net/api/scrape-website?url=${encodeURIComponent(url)}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
+      // Attempt to extract main content using common selectors
+      const contentSelectors = [
+        'main', 
+        'article', 
+        '.content', 
+        '#content', 
+        'body'
+      ];
+
+      let scrapedContent = '';
+      
+      for (const selector of contentSelectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+          scrapedContent = element.innerText;
+          break;
         }
-      );
-  
-      if (!response.ok) {
-        console.warn('Website scraping failed');
-        return '';
       }
-  
-      const data = await response.json();
-      
-      // Extract and process relevant content
-      const scrapedContent = data.content || '';
-      
-      // Limit the content length to prevent overwhelming the context
+
+      // Limit content length
       const maxContentLength = 3000;
-      return scrapedContent.length > maxContentLength 
+      scrapedContent = scrapedContent.length > maxContentLength 
         ? scrapedContent.substring(0, maxContentLength) 
         : scrapedContent;
+
+      // Remove excess whitespace
+      scrapedContent = scrapedContent.replace(/\s+/g, ' ').trim();
+
+      return scrapedContent;
     } catch (error) {
-      console.error('Error scraping website:', error);
+      console.error('Client-side website scraping error:', error);
       return '';
     }
   }
   
-  // Modified streamFromAzureOpenAI function
+  // Modified streamFromAzureOpenAI function remains the same as in your original code
   async function streamFromAzureOpenAI(
     userMessage,
     messageElement,
