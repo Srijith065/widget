@@ -1,7 +1,4 @@
 (function (w, d) {
-  // Ensure widget options are available
-  w.finiWidgetOptions = w.finiWidgetOptions || {};
-
   const msalConfig = {
     auth: {
       clientId: "5c366cc7-6259-4ffa-96ab-8b13ac790d67", // Replace with your client ID
@@ -14,10 +11,11 @@
   async function checkLoginStatus() {
     const accounts = msalInstance.getAllAccounts();
     if (accounts.length > 0) {
-      console.log("User is already logged in:", accounts);
+      console.log("User  is already logged in:", accounts);
+      // You can use the first account to get an access token if needed
       return accounts[0]; // Return the first account
     } else {
-      console.log("User is not logged in.");
+      console.log("User  is not logged in.");
       return null; // No accounts found
     }
   }
@@ -28,6 +26,8 @@
  
     if (existingAccount) {
       console.log("Using existing account:", existingAccount);
+      // Optionally, you can acquire a token silently here if needed
+      // e.g., await msalInstance.acquireTokenSilent({ account: existingAccount });
     } else {
       try {
         const loginResponse = await msalInstance.loginPopup();
@@ -40,34 +40,43 @@
     }
   }
  
-  // Modified widget options retrieval
-  const widgetOptions = w.finiWidgetOptions || { mode: "widget" };
+  const widgetOptions = w.intellientoptions || { mode: "widget" };
   const mode = widgetOptions.mode || "widget";
   const widgetId = widgetOptions.widgetId;
   console.log("widgetId", widgetId);
-  console.log("window.location.href", window.location.href);
+  console.log(" window.location.href", window.location.href);
  
-  // Default branding with more robust configuration
-  const DEFAULT_LOGO = "https://delightful-beach-07c9da51e.5.azurestaticapps.net/widget-logo.png";
+  // if (widgetId !== window.location.href) {
+  //   console.error("Widget ID is required but not provided.");
+  //   return; // Prevent further execution
+  // }
+ 
+  // Default branding
+  const DEFAULT_LOGO =
+    "https://delightful-beach-07c9da51e.5.azurestaticapps.net/widget-logo.png"; // Default Logo - Intellient
   const DEFAULT_THEME = {
     primaryColor: "#0084ff",
     secondaryColor: "#f0f2f5",
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   };
  
-  // Enhanced branding retrieval with detailed fallback
+  // Get customer branding or use defaults
   const branding = {
     logo: widgetOptions.branding?.logo || DEFAULT_LOGO,
     theme: {
-      primaryColor: widgetOptions.branding?.theme?.primaryColor || DEFAULT_THEME.primaryColor,
-      secondaryColor: widgetOptions.branding?.theme?.secondaryColor || DEFAULT_THEME.secondaryColor,
-      fontFamily: widgetOptions.branding?.theme?.fontFamily || DEFAULT_THEME.fontFamily,
+      primaryColor:
+        widgetOptions.branding?.theme?.primaryColor ||
+        DEFAULT_THEME.primaryColor,
+      secondaryColor:
+        widgetOptions.branding?.theme?.secondaryColor ||
+        DEFAULT_THEME.secondaryColor,
+      fontFamily:
+        widgetOptions.branding?.theme?.fontFamily || DEFAULT_THEME.fontFamily,
     },
   };
-
-  console.log("Final Branding Configuration:", branding);
  
-  // Styles for the widget (updated to use dynamic branding)
+  // Styles for the widget
   const styles = `
     .fini-widget-base {
       font-family: ${branding.theme.fontFamily};
@@ -156,7 +165,6 @@
     }
  
     .fini-chat-message {
-      max-width: 70%;
       padding: 8px 16px;
       border-radius: 16px;
       margin: 4px 0;
@@ -253,44 +261,46 @@
       animation: typing-animation 1.4s infinite ease-in-out;
     }
  
-    #name-dropdown {
-      display: none;
-      position: absolute;
-      background: white;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      z-index: 1000;
-      max-height: 200px;
-      overflow-y: auto;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    }
+#name-dropdown {
+    display: none;
+    position: absolute;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    z-index: 1000;
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
  
-    #name-dropdown div {
-      padding: 10px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
+#name-dropdown div {
+    padding: 10px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
  
-    #name-dropdown div:hover {
-      background-color: #f0f0f0;
-    }
+#name-dropdown div:hover {
+    background-color: #f0f0f0;
+}
  
-    input {
-      width: 300px;
-      padding: 10px;
-      border-radius: 4px;
-      border: 1px solid #ccc;
-      margin-bottom: 5px;
-    }
+input {
+    width: 300px;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    margin-bottom: 5px;
+}
  
-    .tag {
-      background-color: #0084ff;
-      color: white;
-      border-radius: 12px;
-      cursor: pointer;
-      font-size: 10px;
-      padding: 2px;
-    }
+.tag {
+    background-color: #0084ff;
+    color: white;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 10px;
+    padding: 2px;
+}
+ 
+ 
  
     .fini-typing-dot:nth-child(1) { animation-delay: 0s; }
     .fini-typing-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -307,10 +317,9 @@
   styleSheet.textContent = styles;
   d.head.appendChild(styleSheet);
  
-  // Function to validate logo URL with enhanced logging
+  // Function to validate logo URL
   function validateLogo(logoUrl) {
     return new Promise((resolve) => {
-      console.log("Attempting to validate logo:", logoUrl);
       const img = new Image();
       const timeout = setTimeout(() => {
         console.warn("Logo loading timed out, using default");
@@ -319,13 +328,12 @@
  
       img.onload = () => {
         clearTimeout(timeout);
-        console.log("Logo loaded successfully:", logoUrl);
         resolve(logoUrl);
       };
  
       img.onerror = () => {
         clearTimeout(timeout);
-        console.warn("Logo failed to load, using default:", logoUrl);
+        console.warn("Logo failed to load, using default");
         resolve(DEFAULT_LOGO);
       };
  
@@ -333,11 +341,15 @@
     });
   }
  
-  let personaData;
+  // Add this at the top of your script
+let conversationHistory = [];
+let personaData = []; // Default empty array
+let abortController;
  
   async function persona() {
     try {
       const response = await fetch(
+        //"http://localhost:3000/api/link-widget/intellibots",
         "https://intellientuat.azurewebsites.net/api/link-widget/intellibots",
         {
           method: "GET",
@@ -351,7 +363,58 @@
     }
   }
   // Updated code - Intellient UAT
-  let abortController = null;
+  function markdownToHtml(markdown) {
+    // Convert **bold** to <strong>
+    markdown = markdown.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+ 
+    // Convert *italic* to <em>
+    markdown = markdown.replace(/\*(.*?)\*/g, "<em>$1</em>");
+ 
+    // Convert - list items to <ul><li>
+    markdown = markdown.replace(/^\s*-\s+(.*)$/g, "<ul><li>$1</li></ul>");
+ 
+    // Handle line breaks
+    markdown = markdown.replace(/\n/g, "<br>");
+ 
+    return markdown;
+  }
+
+  // New function to scrape website content
+  async function scrapeWebsiteContent(url) {
+    try {
+      // Basic implementation of website content scraping
+      const response = await fetch(
+        `https://intellientuat.azurewebsites.net/api/scrape-website?url=${encodeURIComponent(url)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+  
+      if (!response.ok) {
+        console.warn('Website scraping failed');
+        return '';
+      }
+  
+      const data = await response.json();
+      
+      // Extract and process relevant content
+      const scrapedContent = data.content || '';
+      
+      // Limit the content length to prevent overwhelming the context
+      const maxContentLength = 3000;
+      return scrapedContent.length > maxContentLength 
+        ? scrapedContent.substring(0, maxContentLength) 
+        : scrapedContent;
+    } catch (error) {
+      console.error('Error scraping website:', error);
+      return '';
+    }
+  }
+  
+  // Modified streamFromAzureOpenAI function
   async function streamFromAzureOpenAI(
     userMessage,
     messageElement,
@@ -359,68 +422,91 @@
   ) {
     abortController = new AbortController();
     const { signal } = abortController;
-    console.log("intelliBot", intelliBot);
- 
-    console.log("userMessage", userMessage);
-    let filteredBot;
-    if (intelliBot) {
-      // console.log("intelliBot", await personaData);
- 
-      filteredBot = personaData.filter((name) => name.name === intelliBot);
-      console.log("filteredBot", filteredBot);
-    }
- 
+  
+    // Attempt to get the current website URL
+    const currentWebsiteUrl = window.location.href;
+  
+    // Scrape website content if applicable
+    const websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
+  
+    // Prepare context-aware prompt
+    const contextAwarePrompt = websiteContent 
+      ? `Context from ${currentWebsiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
+      : userMessage;
+  
+    conversationHistory.push({ role: "user", content: contextAwarePrompt });
+  
     try {
-      const response = await fetch("https://intellientuat.azurewebsites.net/api/link-widget", {
-        method: "POST",
-        body: JSON.stringify({
-          userMessage,
-          filteredBot, // Add the data you want to pos
-        }),
-        signal,
-      });
- 
+      const response = await fetch(
+        "https://intellientuat.azurewebsites.net/api/link-widget",
+        {
+          method: "POST",
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userMessage: contextAwarePrompt,
+            filteredBot: intelliBot ? personaData.filter((name) => name.name === intelliBot) : null,
+            conversationHistory,
+            websiteUrl: currentWebsiteUrl
+          }),
+          signal,
+        }
+      );
+  
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
- 
+  
       const data = await response.json();
-      console.log("resposnes", data);
+      console.log("responses", data);
       const contentSpan = messageElement.querySelector(".fini-message-content");
- 
+  
       if (data.choices && data.choices[0]?.message?.content) {
-        const content = data.choices[0].message.content;
+        let content = data.choices[0].message.content;
+        console.log("content", content);
+  
+        content = markdownToHtml(content);
         let displayedContent = "";
         const contentArray = content.split("");
- 
+  
         const messagesContainer = document.getElementById("finiChatMessages");
- 
+  
         // Flag to check if the user has scrolled up
         let userScrolledUp = false;
- 
+  
         messagesContainer.addEventListener("scroll", () => {
           const isAtBottom =
             messagesContainer.scrollHeight -
               messagesContainer.scrollTop -
-              messagesContainer.clientHeight <
+              messagesContainer.clientHeight 
             10; // Adjust threshold as needed
           userScrolledUp = !isAtBottom;
         });
- 
+  
+        function updateContent(content) {
+          requestAnimationFrame(() => {
+            contentSpan.innerHTML = content;
+          });
+        }
+  
         for (const char of contentArray) {
           if (signal.aborted) {
             console.log("Streaming stopped");
             return; // Exit the function early if the request is aborted
           }
+  
           displayedContent += char;
-          contentSpan.textContent = displayedContent;
- 
+          updateContent(displayedContent);
+  
           if (!userScrolledUp) {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
           }
- 
-          await new Promise((resolve) => setTimeout(resolve, 20));
+  
+          await new Promise((resolve) => setTimeout(resolve, 5));
         }
+  
+        conversationHistory.push({ role: "assistant", content: content });
       } else {
         throw new Error("No content in response");
       }
@@ -431,16 +517,18 @@
         console.log("Stream was aborted by user.");
       } else {
         console.error("Error:", error);
- 
+  
         messageElement.querySelector(".fini-message-content").textContent =
           "Sorry, there was an error processing your request. Please try again later.";
       }
     }
   }
+
+
+
   function logout() {
     msalInstance.logout();
   }
-
   async function createChatWidget() {
     const validatedLogo = await validateLogo(branding.logo);
  
@@ -519,7 +607,7 @@
     stopButton.style.display = "none";
  
     async function sendMessage() {
-      login();
+      //login();
       let intellibotName = "";
       const tagContainer = document.getElementById("tag-container");
       const tags = tagContainer.getElementsByClassName("tag");
@@ -546,19 +634,19 @@
         console.log("assistantMessage", assistantMessage);
         // console.log("accounts", accounts);
  
-        if (checkLoginStatus()) {
+        //if (checkLoginStatus()) {
           await streamFromAzureOpenAI(
             message,
             assistantMessage,
             intellibotName
           );
-        } else {
-          try {
-            instance.loginPopup();
-          } catch {
-            console.log("login error");
-          }
-        }
+        // } else {
+        //   try {
+        //     instance.loginPopup();
+        //   } catch {
+        //     console.log("login error");
+        //   }
+        // }
         // addMessage("", true);
         messageInput.disabled = false;
         sendButton.disabled = false;
@@ -683,4 +771,4 @@
   if (mode === "widget") {
     createChatWidget();
   }
-})(window, document);
+})(window, document); 
