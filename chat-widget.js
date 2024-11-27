@@ -2,11 +2,31 @@
   // Ensure widget options are available
   w.finiWidgetOptions = w.finiWidgetOptions || {};
 
+  // Enhanced function to fetch website information dynamically
+  async function fetchWebsiteInfo(url) {
+    try {
+      const response = await fetch(`https://intellientuat.azurewebsites.net/api/website-info?url=${encodeURIComponent(url)}`, {
+        method: 'GET'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch website information');
+      }
+      
+      const websiteInfo = await response.json();
+      console.log("Fetched Website Info:", websiteInfo);
+      return websiteInfo;
+    } catch (error) {
+      console.error('Error fetching website info:', error);
+      return null;
+    }
+  }
+
+  // Existing MSAL and other configurations remain the same...
   const msalConfig = {
     auth: {
-      clientId: "5c366cc7-6259-4ffa-96ab-8b13ac790d67", // Replace with your client ID
-      authority:
-        "https://login.microsoftonline.com/b092f630-a3ad-4610-b96e-4a6c75c2a6cc", // Replace with your tenant ID
+      clientId: "5c366cc7-6259-4ffa-96ab-8b13ac790d67",
+      authority: "https://login.microsoftonline.com/b092f630-a3ad-4610-b96e-4a6c75c2a6cc",
     },
   };
   const msalInstance = new msal.PublicClientApplication(msalConfig);
@@ -339,6 +359,7 @@
     try {
       const response = await fetch(
         "https://intellientuat.azurewebsites.net/api/link-widget/intellibots",
+        // "http://localhost:3000/api/link-widget/intellibots",
         {
           method: "GET",
         }
@@ -352,34 +373,31 @@
   }
   // Updated code - Intellient UAT
   let abortController = null;
+  // Modified streamFromAzureOpenAI to include website context
   async function streamFromAzureOpenAI(
     userMessage,
     messageElement,
-    intelliBot
+    intelliBot,
+    websiteUrl
   ) {
     abortController = new AbortController();
     const { signal } = abortController;
-    console.log("intelliBot", intelliBot);
- 
-    console.log("userMessage", userMessage);
-    let filteredBot;
-    if (intelliBot) {
-      // console.log("intelliBot", await personaData);
- 
-      filteredBot = personaData.filter((name) => name.name === intelliBot);
-      console.log("filteredBot", filteredBot);
-    }
- 
+
     try {
+      // Fetch website information if a URL is provided
+      const websiteInfo = websiteUrl ? await fetchWebsiteInfo(websiteUrl) : null;
+
       const response = await fetch("https://intellientuat.azurewebsites.net/api/link-widget", {
         method: "POST",
         body: JSON.stringify({
           userMessage,
-          filteredBot, // Add the data you want to pos
+          filteredBot: intelliBot,
+          websiteContext: websiteInfo
         }),
         signal,
       });
- 
+
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -441,6 +459,8 @@
     msalInstance.logout();
   }
 
+  // Modified createChatWidget to include dynamic website context
+  // Modified createChatWidget to remove website URL input
   async function createChatWidget() {
     const validatedLogo = await validateLogo(branding.logo);
  
@@ -473,9 +493,9 @@
         </div>
       </div>
      
-              <div id="name-dropdown" style="display: none; position: absolute; background: white; border: 1px solid #ccc; z-index: 1000;"></div>
+      <div id="name-dropdown" style="display: none; position: absolute; background: white; border: 1px solid #ccc; z-index: 1000;"></div>
  
-              <div id="tag-container" style="display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px;"></div>
+      <div id="tag-container" style="display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px;"></div>
  
       <div class="fini-chat-input">
         <input type="text" id="finiChatInput" placeholder="Type a message...">
@@ -484,11 +504,11 @@
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
           </svg>
         </button>
-           <button id="finiChatStop">
-         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
-    <circle cx="12" cy="12" r="10" fill="red" />
-    <rect x="7" y="7" width="10" height="10" fill="white" />
-  </svg>
+        <button id="finiChatStop">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+            <circle cx="12" cy="12" r="10" fill="red" />
+            <rect x="7" y="7" width="10" height="10" fill="white" />
+          </svg>
         </button>
       </div>
     `;
@@ -497,7 +517,7 @@
     d.body.appendChild(launcher);
     d.body.appendChild(chatContainer);
  
-    // Add event listeners
+    // Add event listeners (existing code remains the same)
     launcher.addEventListener("click", () => {
       chatContainer.classList.add("visible");
       launcher.style.display = "none";
@@ -518,18 +538,18 @@
     const stopButton = d.getElementById("finiChatStop");
     stopButton.style.display = "none";
  
+    // Modified sendMessage to use website URL from widget options
     async function sendMessage() {
-      login();
       let intellibotName = "";
       const tagContainer = document.getElementById("tag-container");
       const tags = tagContainer.getElementsByClassName("tag");
+      
       if (tags.length !== 0) {
         intellibotName = tags[0].textContent.slice(1);
       }
  
       const message = messageInput.value.trim();
-      console.log("messages", message);
-      console.log("intellibotName", intellibotName);
+      const websiteUrl = w.finiWidgetOptions.websiteUrl || null;
  
       if (message) {
         sendButton.style.display = "none";
@@ -543,23 +563,17 @@
  
         // Add assistant message
         const assistantMessage = addMessage("", false);
-        console.log("assistantMessage", assistantMessage);
-        // console.log("accounts", accounts);
  
-        if (checkLoginStatus()) {
-          await streamFromAzureOpenAI(
-            message,
-            assistantMessage,
-            intellibotName
-          );
-        } else {
-          try {
-            instance.loginPopup();
-          } catch {
-            console.log("login error");
-          }
-        }
-        // addMessage("", true);
+        // Fetch website context if URL is provided in widget options
+        const websiteInfo = websiteUrl ? await fetchWebsiteInfo(websiteUrl) : null;
+ 
+        await streamFromAzureOpenAI(
+          message,
+          assistantMessage,
+          intellibotName,
+          websiteInfo
+        );
+ 
         messageInput.disabled = false;
         sendButton.disabled = false;
         sendButton.style.display = "flex";
@@ -679,9 +693,9 @@
     return messageDiv;
   }
  
-  // Initialize based on mode
-  if (mode === "widget") {
-    createChatWidget();
-  }
+ // Initialize based on mode
+ if (mode === "widget") {
+  createChatWidget();
+}
 })(window, document);
  
