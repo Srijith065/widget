@@ -348,7 +348,7 @@ input {
   async function persona() {
     try {
       const response = await fetch(
-        "http://localhost:3000/api/link-widget/intellibots",
+        "https://intellientuat.azurewebsites.net/api/link-widget/intellibots",
         {
           method: "GET",
         }
@@ -381,7 +381,7 @@ input {
     }
  
     try {
-      const response = await fetch("http://localhost:3000/api/link-widget", {
+      const response = await fetch("https://intellientuat.azurewebsites.net/api/link-widget", {
         method: "POST",
         body: JSON.stringify({
           userMessage,
