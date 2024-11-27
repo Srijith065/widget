@@ -1,8 +1,56 @@
+// EntraID Authentication:
 (function (w, d) {
-  // Get widget options from the embed script
-  const widgetOptions = w.finiWidgetOptions || { mode: "widget" };
+  const msalConfig = {
+    auth: {
+      clientId: "5c366cc7-6259-4ffa-96ab-8b13ac790d67", // Replace with your client ID
+      authority:
+        "https://login.microsoftonline.com/b092f630-a3ad-4610-b96e-4a6c75c2a6cc", // Replace with your tenant ID
+    },
+  };
+  const msalInstance = new msal.PublicClientApplication(msalConfig);
+ 
+  async function checkLoginStatus() {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+      console.log("User  is already logged in:", accounts);
+      // You can use the first account to get an access token if needed
+      return accounts[0]; // Return the first account
+    } else {
+      console.log("User  is not logged in.");
+      return null; // No accounts found
+    }
+  }
+ 
+  async function login() {
+    const existingAccount = await checkLoginStatus();
+    console.log(existingAccount);
+ 
+    if (existingAccount) {
+      console.log("Using existing account:", existingAccount);
+      // Optionally, you can acquire a token silently here if needed
+      // e.g., await msalInstance.acquireTokenSilent({ account: existingAccount });
+    } else {
+      try {
+        const loginResponse = await msalInstance.loginPopup();
+        console.log("Login successful", loginResponse);
+        const accessToken = loginResponse.accessToken;
+        // Store the access token or use it as needed
+      } catch (error) {
+        console.error("Login failed", error);
+      }
+    }
+  }
+ 
+  const widgetOptions = w.intellientoptions || { mode: "widget" };
   const mode = widgetOptions.mode || "widget";
-  const widgetId = widgetOptions.widgetId || "default";
+  const widgetId = widgetOptions.widgetId;
+  console.log("widgetId", widgetId);
+  console.log(" window.location.href", window.location.href);
+ 
+  // if (widgetId !== window.location.href) {
+  //   console.error("Widget ID is required but not provided.");
+  //   return; // Prevent further execution
+  // }
  
   // Default branding
   const DEFAULT_LOGO =
@@ -215,6 +263,47 @@
       animation: typing-animation 1.4s infinite ease-in-out;
     }
  
+#name-dropdown {
+    display: none;
+    position: absolute;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    z-index: 1000;
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+ 
+#name-dropdown div {
+    padding: 10px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+ 
+#name-dropdown div:hover {
+    background-color: #f0f0f0;
+}
+ 
+input {
+    width: 300px;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    margin-bottom: 5px;
+}
+ 
+.tag {
+    background-color: #0084ff;
+    color: white;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 10px;
+    padding: 2px;
+}
+ 
+ 
+ 
     .fini-typing-dot:nth-child(1) { animation-delay: 0s; }
     .fini-typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .fini-typing-dot:nth-child(3) { animation-delay: 0.4s; }
@@ -254,27 +343,59 @@
     });
   }
  
-  // Interacts with Intellient UAT - Accessible to public site
-  async function streamFromAzureOpenAI(userMessage, messageElement) {
+  let personaData;
+ 
+  async function persona() {
     try {
-      // https://intellientuat.azurewebsites.net/api/link-widget
-      // http://localhost:3000/api/link-widget
-      const response = await fetch("https://intellientuat.azurewebsites.net/api/link-widget", {
+      const response = await fetch(
+        "http://localhost:3000/api/link-widget/intellibots",
+        {
+          method: "GET",
+        }
+      );
+      const data = await response.json();
+      personaData = data.response;
+      return data;
+    } catch {
+      console.log("error from persona getmethod");
+    }
+  }
+  // Updated code - Intellient UAT
+  let abortController = null;
+  async function streamFromAzureOpenAI(
+    userMessage,
+    messageElement,
+    intelliBot
+  ) {
+    abortController = new AbortController();
+    const { signal } = abortController;
+    console.log("intelliBot", intelliBot);
+ 
+    console.log("userMessage", userMessage);
+    let filteredBot;
+    if (intelliBot) {
+      // console.log("intelliBot", await personaData);
+ 
+      filteredBot = personaData.filter((name) => name.name === intelliBot);
+      console.log("filteredBot", filteredBot);
+    }
+ 
+    try {
+      const response = await fetch("http://localhost:3000/api/link-widget", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
-          userMessage, // Add the data you want to pos
+          userMessage,
+          filteredBot, // Add the data you want to pos
         }),
+        signal,
       });
-      console.log(response);
  
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
  
       const data = await response.json();
+      console.log("resposnes", data);
       const contentSpan = messageElement.querySelector(".fini-message-content");
  
       if (data.choices && data.choices[0]?.message?.content) {
@@ -282,26 +403,53 @@
         let displayedContent = "";
         const contentArray = content.split("");
  
+        const messagesContainer = document.getElementById("finiChatMessages");
+ 
+        // Flag to check if the user has scrolled up
+        let userScrolledUp = false;
+ 
+        messagesContainer.addEventListener("scroll", () => {
+          const isAtBottom =
+            messagesContainer.scrollHeight -
+              messagesContainer.scrollTop -
+              messagesContainer.clientHeight <
+            10; // Adjust threshold as needed
+          userScrolledUp = !isAtBottom;
+        });
+ 
         for (const char of contentArray) {
+          if (signal.aborted) {
+            console.log("Streaming stopped");
+            return; // Exit the function early if the request is aborted
+          }
           displayedContent += char;
           contentSpan.textContent = displayedContent;
-          await new Promise((resolve) => setTimeout(resolve, 20));
  
-          const messagesContainer = d.getElementById("finiChatMessages");
-          if (messagesContainer) {
+          if (!userScrolledUp) {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
           }
+ 
+          await new Promise((resolve) => setTimeout(resolve, 20));
         }
       } else {
         throw new Error("No content in response");
       }
     } catch (error) {
-      console.error("Error:", error);
-      messageElement.querySelector(".fini-message-content").textContent =
-        "Sorry, there was an error processing your request. Please try again later.";
+      if (error.name === "AbortError") {
+        messageElement.querySelector(".fini-message-content").textContent =
+          "Response Stopped...";
+        console.log("Stream was aborted by user.");
+      } else {
+        console.error("Error:", error);
+ 
+        messageElement.querySelector(".fini-message-content").textContent =
+          "Sorry, there was an error processing your request. Please try again later.";
+      }
     }
   }
- 
+  function logout() {
+    msalInstance.logout();
+  }
   async function createChatWidget() {
     const validatedLogo = await validateLogo(branding.logo);
  
@@ -333,12 +481,23 @@
           })}</div>
         </div>
       </div>
+     
+              <div id="name-dropdown" style="display: none; position: absolute; background: white; border: 1px solid #ccc; z-index: 1000;"></div>
+ 
+              <div id="tag-container" style="display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px;"></div>
+ 
       <div class="fini-chat-input">
         <input type="text" id="finiChatInput" placeholder="Type a message...">
         <button id="finiChatSend">
           <svg viewBox="0 0 24 24">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
           </svg>
+        </button>
+           <button id="finiChatStop">
+         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+    <circle cx="12" cy="12" r="10" fill="red" />
+    <rect x="7" y="7" width="10" height="10" fill="white" />
+  </svg>
         </button>
       </div>
     `;
@@ -363,13 +522,27 @@
  
     // Setup message handling
     const messageInput = d.getElementById("finiChatInput");
+    const nameDropdown = document.getElementById("name-dropdown");
     const sendButton = d.getElementById("finiChatSend");
+    const stopButton = d.getElementById("finiChatStop");
+    stopButton.style.display = "none";
  
     async function sendMessage() {
+      login();
+      let intellibotName = "";
+      const tagContainer = document.getElementById("tag-container");
+      const tags = tagContainer.getElementsByClassName("tag");
+      if (tags.length !== 0) {
+        intellibotName = tags[0].textContent.slice(1);
+      }
+ 
       const message = messageInput.value.trim();
       console.log("messages", message);
+      console.log("intellibotName", intellibotName);
  
       if (message) {
+        sendButton.style.display = "none";
+        stopButton.style.display = "flex";
         messageInput.disabled = true;
         sendButton.disabled = true;
  
@@ -380,11 +553,26 @@
         // Add assistant message
         const assistantMessage = addMessage("", false);
         console.log("assistantMessage", assistantMessage);
+        // console.log("accounts", accounts);
  
-        await streamFromAzureOpenAI(message, assistantMessage);
- 
+        if (checkLoginStatus()) {
+          await streamFromAzureOpenAI(
+            message,
+            assistantMessage,
+            intellibotName
+          );
+        } else {
+          try {
+            instance.loginPopup();
+          } catch {
+            console.log("login error");
+          }
+        }
+        // addMessage("", true);
         messageInput.disabled = false;
         sendButton.disabled = false;
+        sendButton.style.display = "flex";
+        stopButton.style.display = "none";
         messageInput.focus();
       }
     }
@@ -394,6 +582,71 @@
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
+      }
+    });
+ 
+    messageInput.addEventListener("input", async () => {
+      const message = messageInput.value.trim();
+ 
+      // Check if the input contains a name or meets specific conditions
+      if (message) {
+        if (message.includes("@")) {
+          let response = await persona();
+ 
+          const data = response.response;
+          console.log("intellibot resposnes", data); // Replace with the actual function you want to call
+          nameDropdown.innerHTML = "";
+          nameDropdown.style.display = "block";
+          data.forEach((item) => {
+            const nameItem = document.createElement("div");
+            nameItem.textContent = item.name; // Assuming 'name' is the field you want to display
+            nameItem.style.padding = "8px";
+            nameItem.style.cursor = "pointer";
+ 
+            // Add click event to insert the name into the input field
+            nameItem.addEventListener("click", () => {
+              const tagName = item.name; // Get the name from the item
+              // Create a tag element
+              const tagElement = document.createElement("span");
+              tagElement.className = "tag"; // You can style this class in your CSS
+              tagElement.textContent = `@${tagName}`;
+ 
+              // Append the tag to the chat container (or wherever you want)
+              const tagContainer = document.getElementById("tag-container");
+              tagContainer.appendChild(tagElement);
+ 
+              // Optionally, you can add functionality to remove the tag if needed
+              tagElement.addEventListener("click", () => {
+                tagContainer.removeChild(tagElement);
+              });
+ 
+              messageInput.value = ""; // Clear the input field
+              nameDropdown.style.display = "none";
+            });
+ 
+            nameDropdown.appendChild(nameItem);
+          });
+        }
+      } else {
+        nameDropdown.style.display = "none";
+      }
+    });
+ 
+    // Hide dropdown when clicking outside
+    document.addEventListener("click", (event) => {
+      if (
+        !nameDropdown.contains(event.target) &&
+        event.target !== messageInput
+      ) {
+        nameDropdown.style.display = "none"; // Hide dropdown
+      }
+    });
+ 
+    stopButton.addEventListener("click", () => {
+      if (abortController) {
+        abortController.abort(); // Abort the ongoing fetch request
+        stopButton.style.display = "none"; // Hide the stop button after stopping the stream
+        console.log("Streaming process stopped.");
       }
     });
   }
@@ -434,22 +687,10 @@
     container.scrollTop = container.scrollHeight;
     return messageDiv;
   }
-
-    // Modify the initialization to ensure it runs after DOM is fully loaded
-    function init() {
-      if (d.readyState === 'loading') {
-        d.addEventListener('DOMContentLoaded', createChatWidget);
-      } else {
-        createChatWidget();
-      }
-    }
  
   // Initialize based on mode
-  // if (mode === "widget") {
-  //   createChatWidget();
-  // }
-    // Initialize based on mode
-    if (mode === "widget") {
-      init();
-    }
+  if (mode === "widget") {
+    createChatWidget();
+  }
 })(window, document);
+ 
