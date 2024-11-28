@@ -346,76 +346,247 @@ input {
   let conversationHistory = [];
    // New function to retrieve content from URLs using a proxy approach
    // New function to retrieve content from URLs using a proxy approach
-async function retrieveWebsiteContent(url) {
-  try {
-    // Use a CORS proxy service to fetch website content
-    const proxyUrl = `https://cors-anywhere.herokuapp.com/${url}`;
-    
-    const response = await fetch(proxyUrl, {
-      method: 'GET',
-      headers: {
-        'Origin': window.location.origin // Required by some CORS proxy services
+   async function retrieveWebsiteContent(url) {
+    try {
+      const response = await fetch(`https://cors-anywhere.herokuapp.com/${url}`, {
+        method: 'GET',
+        headers: {
+          'Origin': window.location.origin
+        }
+      });
+  
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+  
+      const htmlText = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlText, 'text/html');
+  
+      // Advanced content extraction
+      function extractRelevantContent() {
+        // Define key sections and their extraction strategies
+        const contentStrategies = [
+          // Company Overview
+          {
+            keywords: ['about', 'overview', 'company', 'who we are'],
+            extractor: () => {
+              const selectors = [
+                'section.about', 
+                '.company-overview', 
+                '#about', 
+                'div.about-us', 
+                'p.company-description'
+              ];
+              
+              for (const selector of selectors) {
+                const element = doc.querySelector(selector);
+                if (element) return element.textContent.trim();
+              }
+              
+              // Fallback to first few paragraphs
+              const paragraphs = doc.querySelectorAll('p');
+              return Array.from(paragraphs)
+                .slice(0, 3)
+                .map(p => p.textContent.trim())
+                .join(' ');
+            }
+          },
+          // Awards and Achievements
+          {
+            keywords: ['awards', 'achievements', 'recognitions', 'global', 'national'],
+            extractor: () => {
+              const awardSelectors = [
+                '.awards-section',
+                '#awards',
+                '.achievements',
+                'div.company-awards'
+              ];
+  
+              const awardPatterns = [
+                /(\d+)\s*Global\s*Awards\s*\|\s*(\d+)\s*National\s*Awards/i,
+                /Global\s*Awards:\s*(\d+).*National\s*Awards:\s*(\d+)/i,
+                /Awards\s*Won:\s*(\d+)\s*Global\s*\|\s*(\d+)\s*National/i
+              ];
+  
+              // Check selectors first
+              for (const selector of awardSelectors) {
+                const element = doc.querySelector(selector);
+                if (element) {
+                  const text = element.textContent.trim();
+                  for (const pattern of awardPatterns) {
+                    const match = text.match(pattern);
+                    if (match) {
+                      return `Quadra Systems has won ${match[1]} Global Awards and ${match[2]} National Awards.`;
+                    }
+                  }
+                }
+              }
+  
+              // Scan entire document
+              const documentText = doc.body.textContent;
+              for (const pattern of awardPatterns) {
+                const match = documentText.match(pattern);
+                if (match) {
+                  return `Quadra Systems has won ${match[1]} Global Awards and ${match[2]} National Awards.`;
+                }
+              }
+  
+              return "Award information not found on the website.";
+            }
+          },
+          // Services
+          {
+            keywords: ['services', 'what we do', 'solutions', 'offerings'],
+            extractor: () => {
+              const serviceSelectors = [
+                'section.services',
+                '.our-services',
+                '#services',
+                'div.service-list'
+              ];
+  
+              for (const selector of serviceSelectors) {
+                const element = doc.querySelector(selector);
+                if (element) return element.textContent.trim();
+              }
+  
+              // Fallback to finding service-related text
+              const serviceElements = [...doc.querySelectorAll('h2, h3')]
+                .filter(el => /services|solutions|offerings/i.test(el.textContent));
+              
+              if (serviceElements.length > 0) {
+                return serviceElements
+                  .map(el => el.textContent + 
+                    (el.nextElementSibling ? el.nextElementSibling.textContent : '')
+                  )
+                  .join(' ');
+              }
+  
+              return "Service information not found on the website.";
+            }
+          },
+          // Contact Information
+          {
+            keywords: ['contact', 'location', 'address', 'phone', 'email'],
+            extractor: () => {
+              const contactSelectors = [
+                '.contact-info',
+                '#contact',
+                'div.company-contact',
+                'section.contact'
+              ];
+  
+              const contactPatterns = [
+                /(?:Phone|Tel):\s*([\+\d\s-]+)/i,
+                /(?:Email):\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i,
+                /Address:\s*(.+?)(?:\n|\r|$)/i
+              ];
+  
+              // Check specific selectors
+              for (const selector of contactSelectors) {
+                const element = doc.querySelector(selector);
+                if (element) {
+                  const text = element.textContent.trim();
+                  const contactInfo = contactPatterns
+                    .map(pattern => text.match(pattern))
+                    .filter(match => match)
+                    .map(match => match[0]);
+                  
+                  return contactInfo.length > 0 
+                    ? contactInfo.join(', ') 
+                    : "Detailed contact information not found.";
+                }
+              }
+  
+              // Scan entire document
+              const documentText = doc.body.textContent;
+              const contactInfo = contactPatterns
+                .map(pattern => documentText.match(pattern))
+                .filter(match => match)
+                .map(match => match[0]);
+  
+              return contactInfo.length > 0 
+                ? contactInfo.join(', ') 
+                : "Contact information not found on the website.";
+            }
+          }
+        ];
+  
+        // Find the most relevant content based on user query
+        return contentStrategies;
+      }
+  
+      return {
+        fullText: htmlText,
+        extractionStrategies: extractRelevantContent()
+      };
+    } catch (error) {
+      console.error(`Error fetching content from ${url}:`, error);
+      return `Unable to retrieve content from ${url}. Error: ${error.message}`;
     }
-
-    // Parse the HTML content
-    const htmlText = await response.text();
-    
-    // Basic content extraction using DOM parsing
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(htmlText, 'text/html');
-    
-    // Extract text from important elements
-    const textElements = [
-      ...doc.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li, article, main, .content')
-    ];
-    
-    // Combine text content, limit to prevent overwhelming the context
-    const extractedContent = textElements
-      .map(el => el.textContent.trim())
-      .filter(text => text.length > 0)
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .slice(0, 3000); // Limit to 3000 characters
-    
-    return extractedContent;
-  } catch (error) {
-    console.error(`Error fetching content from ${url}:`, error);
-    return `Unable to retrieve content from ${url}. Error: ${error.message}`;
   }
-}
-
-// Modified streamFromAzureOpenAI function to incorporate URL content
-async function streamFromAzureOpenAI(
-  userMessage,
-  messageElement,
-  intelliBot
-) {
-  abortController = new AbortController();
-  const { signal } = abortController;
-
-  // Retrieve content from configured URLs
-  let additionalContext = "";
-  for (const source of CONTENT_SOURCES) {
-    const sourceContent = await retrieveWebsiteContent(source);
-    additionalContext += `\n\nContent from ${source}:\n${sourceContent}`;
-  }
-
-  // Prepare the full message with additional context
-  const enhancedUserMessage = `
-User Query: ${userMessage}
-
-Additional Context from Configured Sources:
-${additionalContext}
-
-Please provide a response that incorporates the additional context if relevant.`;
-
-  conversationHistory.push({ role: "user", content: enhancedUserMessage });
-
+  
+  async function streamFromAzureOpenAI(
+    userMessage,
+    messageElement,
+    intelliBot
+  ) {
+    abortController = new AbortController();
+    const { signal } = abortController;
+  
+    // Retrieve content from configured URLs
+    let additionalContext = "";
+    let extractionStrategies = [];
+  
+    for (const source of CONTENT_SOURCES) {
+      const sourceContent = await retrieveWebsiteContent(source);
+      
+      // If it's an object with extraction strategies
+      if (typeof sourceContent === 'object' && sourceContent.extractionStrategies) {
+        extractionStrategies = sourceContent.extractionStrategies;
+        
+        // Find most relevant content for the user's query
+        const relevantExtractors = extractionStrategies.filter(strategy => 
+          strategy.keywords.some(keyword => 
+            userMessage.toLowerCase().includes(keyword)
+          )
+        );
+  
+        // If specific extractors found, use them
+        if (relevantExtractors.length > 0) {
+          for (const extractor of relevantExtractors) {
+            additionalContext += `\n\n${extractor.extractor()}`;
+          }
+        } else {
+          // Fallback to first extractor if no specific match
+          additionalContext += `\n\n${extractionStrategies[0].extractor()}`;
+        }
+      } else {
+        additionalContext += `\n\n${sourceContent}`;
+      }
+    }
+  
+    // Enhanced prompt to encourage precise extraction
+    const enhancedUserMessage = `
+  Context: You have additional information about the organization from its website.
+  
+  User Query: ${userMessage}
+  
+  Additional Website Context:
+  ${additionalContext}
+  
+  Instructions:
+  - Carefully review the additional context
+  - Provide a precise answer based on the website information
+  - If the exact information is not found, suggest checking the website directly
+  - Focus on extracting the most relevant and accurate information
+  
+  Please answer the question using only the information available in the provided context.`;
+  
+    conversationHistory.push({ role: "user", content: enhancedUserMessage });
+  
+    // Existing stream logic remains the same
     try {
       const response = await fetch(
         "https://intellientuat.azurewebsites.net/api/link-widget",
