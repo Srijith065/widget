@@ -345,67 +345,68 @@ input {
   let abortController = null;
   let conversationHistory = [];
    // New function to retrieve content from URLs using a proxy approach
-   async function retrieveWebsiteContent(url) {
-    try {
-      // Use a CORS proxy service to fetch website content
-      const proxyUrl = `https://cors-anywhere.herokuapp.com/${url}`;
-      
-      const response = await fetch(proxyUrl, {
-        method: 'GET',
-        headers: {
-          'Origin': window.location.origin // Required by some CORS proxy services
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+   // New function to retrieve content from URLs using a proxy approach
+async function retrieveWebsiteContent(url) {
+  try {
+    // Use a CORS proxy service to fetch website content
+    const proxyUrl = `https://cors-anywhere.herokuapp.com/${url}`;
+    
+    const response = await fetch(proxyUrl, {
+      method: 'GET',
+      headers: {
+        'Origin': window.location.origin // Required by some CORS proxy services
       }
+    });
 
-      // Parse the HTML content
-      const htmlText = await response.text();
-      
-      // Basic content extraction using DOM parsing
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(htmlText, 'text/html');
-      
-      // Extract text from important elements
-      const textElements = [
-        ...doc.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li, article, main, .content')
-      ];
-      
-      // Combine text content, limit to prevent overwhelming the context
-      const extractedContent = textElements
-        .map(el => el.textContent.trim())
-        .filter(text => text.length > 0)
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .slice(0, 3000); // Limit to 3000 characters
-      
-      return extractedContent;
-    } catch (error) {
-      console.error(`Error fetching content from ${url}:`, error);
-      return `Unable to retrieve content from ${url}. Error: ${error.message}`;
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+
+    // Parse the HTML content
+    const htmlText = await response.text();
+    
+    // Basic content extraction using DOM parsing
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlText, 'text/html');
+    
+    // Extract text from important elements
+    const textElements = [
+      ...doc.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li, article, main, .content')
+    ];
+    
+    // Combine text content, limit to prevent overwhelming the context
+    const extractedContent = textElements
+      .map(el => el.textContent.trim())
+      .filter(text => text.length > 0)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .slice(0, 3000); // Limit to 3000 characters
+    
+    return extractedContent;
+  } catch (error) {
+    console.error(`Error fetching content from ${url}:`, error);
+    return `Unable to retrieve content from ${url}. Error: ${error.message}`;
+  }
+}
+
+// Modified streamFromAzureOpenAI function to incorporate URL content
+async function streamFromAzureOpenAI(
+  userMessage,
+  messageElement,
+  intelliBot
+) {
+  abortController = new AbortController();
+  const { signal } = abortController;
+
+  // Retrieve content from configured URLs
+  let additionalContext = "";
+  for (const source of CONTENT_SOURCES) {
+    const sourceContent = await retrieveWebsiteContent(source);
+    additionalContext += `\n\nContent from ${source}:\n${sourceContent}`;
   }
 
-  // Modified streamFromAzureOpenAI function to incorporate URL content
-  async function streamFromAzureOpenAI(
-    userMessage,
-    messageElement,
-    intelliBot
-  ) {
-    abortController = new AbortController();
-    const { signal } = abortController;
-
-    // Retrieve content from configured URLs
-    let additionalContext = "";
-    for (const source of CONTENT_SOURCES) {
-      const sourceContent = await retrieveWebsiteContent(source);
-      additionalContext += `\n\nContent from ${source}:\n${sourceContent}`;
-    }
-
-    // Prepare the full message with additional context
-    const enhancedUserMessage = `
+  // Prepare the full message with additional context
+  const enhancedUserMessage = `
 User Query: ${userMessage}
 
 Additional Context from Configured Sources:
@@ -413,7 +414,7 @@ ${additionalContext}
 
 Please provide a response that incorporates the additional context if relevant.`;
 
-    conversationHistory.push({ role: "user", content: enhancedUserMessage });
+  conversationHistory.push({ role: "user", content: enhancedUserMessage });
 
     try {
       const response = await fetch(
