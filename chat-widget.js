@@ -534,7 +534,6 @@ let abortController;
     msalInstance.logout();
   }
   async function createChatWidget() {
-    let response =await persona();
     const validatedLogo = await validateLogo(branding.logo);
  
     // Create launcher
@@ -643,7 +642,7 @@ let abortController;
           await streamFromAzureOpenAI(
             message,
             assistantMessage,
-            "Context-Scraper"
+            intellibotName
           );
         // } else {
         //   try {
@@ -675,7 +674,7 @@ let abortController;
       // Check if the input contains a name or meets specific conditions
       if (message) {
         if (message.includes("@")) {
-          // let response = await persona();
+          let response = await persona();
  
           const data = response.response;
           console.log("intellibot resposnes", data); // Replace with the actual function you want to call
