@@ -345,7 +345,6 @@ input {
   let abortController = null;
   let conversationHistory = [];
    // New function to retrieve content from URLs using a proxy approach
-   // New function to retrieve content from URLs using a proxy approach
    async function retrieveWebsiteContent(url) {
     try {
       const response = await fetch(`https://cors-anywhere.herokuapp.com/${url}`, {
@@ -363,118 +362,71 @@ input {
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
   
-      // Advanced content extraction
+      // Advanced content extraction strategies
       function extractRelevantContent() {
-        // Define key sections and their extraction strategies
         const contentStrategies = [
           // Company Overview
           {
-            keywords: ['about', 'overview', 'company', 'who we are'],
+            keywords: ['about', 'overview', 'company', 'who we are', 'introduction'],
             extractor: () => {
               const selectors = [
                 'section.about', 
                 '.company-overview', 
                 '#about', 
                 'div.about-us', 
-                'p.company-description'
+                'p.company-description',
+                'main p',
+                'body p'
               ];
               
               for (const selector of selectors) {
                 const element = doc.querySelector(selector);
-                if (element) return element.textContent.trim();
+                if (element) {
+                  // Get the first few paragraphs or trim long text
+                  const paragraphs = element.textContent.trim().split(/\.\s+/);
+                  return paragraphs.slice(0, 3).join('. ') + '.';
+                }
               }
               
-              // Fallback to first few paragraphs
-              const paragraphs = doc.querySelectorAll('p');
-              return Array.from(paragraphs)
-                .slice(0, 3)
-                .map(p => p.textContent.trim())
-                .join(' ');
+              return "Company overview not found on the website.";
             }
           },
-          // Awards and Achievements
+          // Services and Offerings
           {
-            keywords: ['awards', 'achievements', 'recognitions', 'global', 'national'],
-            extractor: () => {
-              const awardSelectors = [
-                '.awards-section',
-                '#awards',
-                '.achievements',
-                'div.company-awards'
-              ];
-  
-              const awardPatterns = [
-                /(\d+)\s*Global\s*Awards\s*\|\s*(\d+)\s*National\s*Awards/i,
-                /Global\s*Awards:\s*(\d+).*National\s*Awards:\s*(\d+)/i,
-                /Awards\s*Won:\s*(\d+)\s*Global\s*\|\s*(\d+)\s*National/i
-              ];
-  
-              // Check selectors first
-              for (const selector of awardSelectors) {
-                const element = doc.querySelector(selector);
-                if (element) {
-                  const text = element.textContent.trim();
-                  for (const pattern of awardPatterns) {
-                    const match = text.match(pattern);
-                    if (match) {
-                      return `Quadra Systems has won ${match[1]} Global Awards and ${match[2]} National Awards.`;
-                    }
-                  }
-                }
-              }
-  
-              // Scan entire document
-              const documentText = doc.body.textContent;
-              for (const pattern of awardPatterns) {
-                const match = documentText.match(pattern);
-                if (match) {
-                  return `Quadra Systems has won ${match[1]} Global Awards and ${match[2]} National Awards.`;
-                }
-              }
-  
-              return "Award information not found on the website.";
-            }
-          },
-          // Services
-          {
-            keywords: ['services', 'what we do', 'solutions', 'offerings'],
+            keywords: ['services', 'solutions', 'what we do', 'offerings', 'products'],
             extractor: () => {
               const serviceSelectors = [
                 'section.services',
                 '.our-services',
                 '#services',
-                'div.service-list'
+                'div.service-list',
+                'ul.services',
+                'li.service'
               ];
   
               for (const selector of serviceSelectors) {
-                const element = doc.querySelector(selector);
-                if (element) return element.textContent.trim();
+                const elements = doc.querySelectorAll(selector);
+                if (elements.length > 0) {
+                  return Array.from(elements)
+                    .map(el => el.textContent.trim())
+                    .join('; ')
+                    .slice(0, 500); // Limit to 500 characters
+                }
               }
   
-              // Fallback to finding service-related text
-              const serviceElements = [...doc.querySelectorAll('h2, h3')]
-                .filter(el => /services|solutions|offerings/i.test(el.textContent));
-              
-              if (serviceElements.length > 0) {
-                return serviceElements
-                  .map(el => el.textContent + 
-                    (el.nextElementSibling ? el.nextElementSibling.textContent : '')
-                  )
-                  .join(' ');
-              }
-  
-              return "Service information not found on the website.";
+              return "Detailed service information not found on the website.";
             }
           },
           // Contact Information
           {
-            keywords: ['contact', 'location', 'address', 'phone', 'email'],
+            keywords: ['contact', 'location', 'address', 'phone', 'email', 'reach us'],
             extractor: () => {
               const contactSelectors = [
                 '.contact-info',
                 '#contact',
                 'div.company-contact',
-                'section.contact'
+                'section.contact',
+                'address'
               ];
   
               const contactPatterns = [
@@ -495,25 +447,15 @@ input {
                   
                   return contactInfo.length > 0 
                     ? contactInfo.join(', ') 
-                    : "Detailed contact information not found.";
+                    : "Basic contact details found but not extractable.";
                 }
               }
   
-              // Scan entire document
-              const documentText = doc.body.textContent;
-              const contactInfo = contactPatterns
-                .map(pattern => documentText.match(pattern))
-                .filter(match => match)
-                .map(match => match[0]);
-  
-              return contactInfo.length > 0 
-                ? contactInfo.join(', ') 
-                : "Contact information not found on the website.";
+              return "Contact information not found on the website.";
             }
           }
         ];
   
-        // Find the most relevant content based on user query
         return contentStrategies;
       }
   
@@ -539,37 +481,40 @@ input {
     let additionalContext = "";
     let extractionStrategies = [];
   
-    for (const source of CONTENT_SOURCES) {
-      const sourceContent = await retrieveWebsiteContent(source);
-      
-      // If it's an object with extraction strategies
-      if (typeof sourceContent === 'object' && sourceContent.extractionStrategies) {
-        extractionStrategies = sourceContent.extractionStrategies;
+    // Check if content sources are configured
+    if (CONTENT_SOURCES && CONTENT_SOURCES.length > 0) {
+      for (const source of CONTENT_SOURCES) {
+        const sourceContent = await retrieveWebsiteContent(source);
         
-        // Find most relevant content for the user's query
-        const relevantExtractors = extractionStrategies.filter(strategy => 
-          strategy.keywords.some(keyword => 
-            userMessage.toLowerCase().includes(keyword)
-          )
-        );
+        // If it's an object with extraction strategies
+        if (typeof sourceContent === 'object' && sourceContent.extractionStrategies) {
+          extractionStrategies = sourceContent.extractionStrategies;
+          
+          // Find most relevant content for the user's query
+          const relevantExtractors = extractionStrategies.filter(strategy => 
+            strategy.keywords.some(keyword => 
+              userMessage.toLowerCase().includes(keyword)
+            )
+          );
   
-        // If specific extractors found, use them
-        if (relevantExtractors.length > 0) {
-          for (const extractor of relevantExtractors) {
-            additionalContext += `\n\n${extractor.extractor()}`;
+          // If specific extractors found, use them
+          if (relevantExtractors.length > 0) {
+            for (const extractor of relevantExtractors) {
+              additionalContext += `\n\n${extractor.extractor()}`;
+            }
+          } else {
+            // Fallback to first extractor if no specific match
+            additionalContext += `\n\n${extractionStrategies[0].extractor()}`;
           }
         } else {
-          // Fallback to first extractor if no specific match
-          additionalContext += `\n\n${extractionStrategies[0].extractor()}`;
+          additionalContext += `\n\n${sourceContent}`;
         }
-      } else {
-        additionalContext += `\n\n${sourceContent}`;
       }
     }
   
-    // Enhanced prompt to encourage precise extraction
+    // Enhanced prompt to incorporate website context
     const enhancedUserMessage = `
-  Context: You have additional information about the organization from its website.
+  Context: You have additional website information to help answer the query.
   
   User Query: ${userMessage}
   
@@ -577,12 +522,13 @@ input {
   ${additionalContext}
   
   Instructions:
-  - Carefully review the additional context
-  - Provide a precise answer based on the website information
-  - If the exact information is not found, suggest checking the website directly
-  - Focus on extracting the most relevant and accurate information
+  - Carefully review the additional website context
+  - Provide a precise and informative answer
+  - Cite the website context if relevant
+  - If exact information is not found, suggest checking the website directly
+  - Focus on extracting the most relevant and accurate information possible
   
-  Please answer the question using only the information available in the provided context.`;
+  Please answer the question using the available context.`;
   
     conversationHistory.push({ role: "user", content: enhancedUserMessage });
   
