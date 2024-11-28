@@ -1,50 +1,10 @@
 (function (w, d) {
-  const msalConfig = {
-    auth: {
-      clientId: "5c366cc7-6259-4ffa-96ab-8b13ac790d67", // Replace with your client ID
-      authority:
-        "https://login.microsoftonline.com/b092f630-a3ad-4610-b96e-4a6c75c2a6cc", // Replace with your tenant ID
-    },
-  };
-  const msalInstance = new msal.PublicClientApplication(msalConfig);
- 
-  async function checkLoginStatus() {
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length > 0) {
-      console.log("User  is already logged in:", accounts);
-      // You can use the first account to get an access token if needed
-      return accounts[0]; // Return the first account
-    } else {
-      console.log("User  is not logged in.");
-      return null; // No accounts found
-    }
-  }
- 
-  async function login() {
-    const existingAccount = await checkLoginStatus();
-    console.log(existingAccount);
- 
-    if (existingAccount) {
-      console.log("Using existing account:", existingAccount);
-      // Optionally, you can acquire a token silently here if needed
-      // e.g., await msalInstance.acquireTokenSilent({ account: existingAccount });
-    } else {
-      try {
-        const loginResponse = await msalInstance.loginPopup();
-        console.log("Login successful", loginResponse);
-        const accessToken = loginResponse.accessToken;
-        // Store the access token or use it as needed
-      } catch (error) {
-        console.error("Login failed", error);
-      }
-    }
-  }
- 
-  const widgetOptions = w.intellientoptions || { mode: "widget" };
+  const widgetOptions = w.finiWidgetOptions || { mode: "widget" };
   const mode = widgetOptions.mode || "widget";
   const widgetId = widgetOptions.widgetId;
-  console.log("widgetId", widgetId);
-  console.log(" window.location.href", window.location.href);
+  
+  // New configuration for URL-based content retrieval
+  const CONTENT_SOURCES = widgetOptions.contentSources || [];
  
   // if (widgetId !== window.location.href) {
   //   console.error("Widget ID is required but not provided.");
@@ -239,6 +199,12 @@
       height: 20px;
       fill: white;
     }
+        .ask-intellient-title {
+    display: block;
+    font-size: 20px;
+    margin: 0;
+    font-weight: bold;
+  }
  
     .fini-timestamp {
       font-size: 12px;
@@ -290,13 +256,6 @@ input {
     border: 1px solid #ccc;
     margin-bottom: 5px;
 }
-
-.ask-intellient-title {
-      display: block;
-      font-size: 20px;
-      margin: 0;
-      font-weight: bold;
-    }
  
 .tag {
     background-color: #0084ff;
@@ -348,15 +307,11 @@ input {
     });
   }
  
-  // Add this at the top of your script
-let conversationHistory = [];
-let personaData = []; // Default empty array
-let abortController;
+  let personaData;
  
   async function persona() {
     try {
       const response = await fetch(
-        //"http://localhost:3000/api/link-widget/intellibots",
         "https://intellientuat.azurewebsites.net/api/link-widget/intellibots",
         {
           method: "GET",
@@ -369,7 +324,7 @@ let abortController;
       console.log("error from persona getmethod");
     }
   }
-  // Updated code - Intellient UAT
+ 
   function markdownToHtml(markdown) {
     // Convert **bold** to <strong>
     markdown = markdown.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
@@ -385,83 +340,55 @@ let abortController;
  
     return markdown;
   }
-
-  // New function to scrape website content
-  async function scrapeWebsiteContent(url) {
+ 
+  // Updated code - Intellient UAT
+  let abortController = null;
+  let conversationHistory = [];
+   // New function to retrieve content from URLs using a proxy approach
+   async function retrieveWebsiteContent(url) {
     try {
-      // Enhanced content search strategies
-      const contentSearchStrategies = [
-        // Direct text search across the entire document
-        () => {
-          const pageText = document.body.innerText || document.body.textContent;
-          return pageText;
-        },
-        
-        // Search for specific elements with potential content
-        () => {
-          const contentElements = [
-            ...document.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, span')
-          ];
-          return contentElements
-            .map(el => el.innerText || el.textContent)
-            .join(' ');
-        },
-        
-        // More aggressive text extraction
-        () => {
-          const walker = document.createTreeWalker(
-            document.body, 
-            NodeFilter.SHOW_TEXT,
-            null,
-            false
-          );
-  
-          let text = '';
-          while(walker.nextNode()) {
-            text += walker.currentNode.textContent + ' ';
-          }
-          return text;
-        }
-      ];
-  
-      // Try each content search strategy
-      let scrapedContent = '';
-      for (const strategy of contentSearchStrategies) {
-        try {
-          scrapedContent = strategy();
-          if (scrapedContent && scrapedContent.trim().length > 0) break;
-        } catch (error) {
-          console.warn('Content extraction strategy failed:', error);
-        }
-      }
-  
-      // Clean and prepare content
-      scrapedContent = scrapedContent
-        .replace(/\s+/g, ' ')  // Normalize whitespace
-        .replace(/[^\w\s.,!?]/g, '')  // Remove special characters
-        .trim()
-        .substring(0, 5000);  // Increased max length for more context
-  
-      // Enhanced logging
-      console.log(`Website Content Extraction Debug:
-        - URL: ${url}
-        - Content Length: ${scrapedContent.length} characters
-        - First 300 chars: ${scrapedContent.substring(0, 300)}...`);
-  
-      // Specific phrase checking
-      const phraseToCheck = 'Welcome to Intellient Chat Widget';
-      const phraseExists = scrapedContent.includes(phraseToCheck);
+      // Use a CORS proxy service to fetch website content
+      const proxyUrl = `https://cors-anywhere.herokuapp.com/${url}`;
       
-      console.log(`Phrase "${phraseToCheck}" exists: ${phraseExists}`);
-  
-      return scrapedContent || '';
+      const response = await fetch(proxyUrl, {
+        method: 'GET',
+        headers: {
+          'Origin': window.location.origin // Required by some CORS proxy services
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Parse the HTML content
+      const htmlText = await response.text();
+      
+      // Basic content extraction using DOM parsing
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlText, 'text/html');
+      
+      // Extract text from important elements
+      const textElements = [
+        ...doc.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li, article, main, .content')
+      ];
+      
+      // Combine text content, limit to prevent overwhelming the context
+      const extractedContent = textElements
+        .map(el => el.textContent.trim())
+        .filter(text => text.length > 0)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .slice(0, 3000); // Limit to 3000 characters
+      
+      return extractedContent;
     } catch (error) {
-      console.error('Advanced website content scraping error:', error);
-      return '';
+      console.error(`Error fetching content from ${url}:`, error);
+      return `Unable to retrieve content from ${url}. Error: ${error.message}`;
     }
   }
-  
-  // Modified streamFromAzureOpenAI function remains the same as in your original code
+
+  // Modified streamFromAzureOpenAI function to incorporate URL content
   async function streamFromAzureOpenAI(
     userMessage,
     messageElement,
@@ -469,117 +396,108 @@ let abortController;
   ) {
     abortController = new AbortController();
     const { signal } = abortController;
-  
-    // Attempt to get the current website URL
-    const currentWebsiteUrl = window.location.href;
-  
-    // Scrape website content if applicable
-    const websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
-  
-    // Prepare context-aware prompt
-    const contextAwarePrompt = websiteContent 
-      ? `Context from ${currentWebsiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
-      : userMessage;
-  
-    conversationHistory.push({ role: "user", content: contextAwarePrompt });
-  
+
+    // Retrieve content from configured URLs
+    let additionalContext = "";
+    for (const source of CONTENT_SOURCES) {
+      const sourceContent = await retrieveWebsiteContent(source);
+      additionalContext += `\n\nContent from ${source}:\n${sourceContent}`;
+    }
+
+    // Prepare the full message with additional context
+    const enhancedUserMessage = `
+User Query: ${userMessage}
+
+Additional Context from Configured Sources:
+${additionalContext}
+
+Please provide a response that incorporates the additional context if relevant.`;
+
+    conversationHistory.push({ role: "user", content: enhancedUserMessage });
+
     try {
       const response = await fetch(
         "https://intellientuat.azurewebsites.net/api/link-widget",
         {
           method: "POST",
-          headers: {
-            'Content-Type': 'application/json'
-          },
           body: JSON.stringify({
-            userMessage: contextAwarePrompt,
+            userMessage: enhancedUserMessage,
             filteredBot: intelliBot ? personaData.filter((name) => name.name === intelliBot) : null,
             conversationHistory,
-            websiteUrl: currentWebsiteUrl
           }),
           signal,
         }
       );
-  
+ 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-  
+ 
       const data = await response.json();
-      console.log("responses", data);
+      console.log("resposnes", data);
       const contentSpan = messageElement.querySelector(".fini-message-content");
-  
+ 
       if (data.choices && data.choices[0]?.message?.content) {
         let content = data.choices[0].message.content;
-        console.log("content", content);
-  
+        console.log("contemt", content);
+ 
         content = markdownToHtml(content);
         let displayedContent = "";
         const contentArray = content.split("");
-  
+ 
         const messagesContainer = document.getElementById("finiChatMessages");
-  
+ 
         // Flag to check if the user has scrolled up
         let userScrolledUp = false;
-  
+ 
         messagesContainer.addEventListener("scroll", () => {
           const isAtBottom =
             messagesContainer.scrollHeight -
               messagesContainer.scrollTop -
-              messagesContainer.clientHeight 
+              messagesContainer.clientHeight <
             10; // Adjust threshold as needed
           userScrolledUp = !isAtBottom;
         });
-  
         function updateContent(content) {
           requestAnimationFrame(() => {
             contentSpan.innerHTML = content;
           });
         }
-  
         for (const char of contentArray) {
           if (signal.aborted) {
             console.log("Streaming stopped");
             return; // Exit the function early if the request is aborted
           }
-  
           displayedContent += char;
           updateContent(displayedContent);
-  
+ 
           if (!userScrolledUp) {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
           }
-  
+ 
           await new Promise((resolve) => setTimeout(resolve, 5));
         }
-  
         conversationHistory.push({ role: "assistant", content: content });
       } else {
         throw new Error("No content in response");
       }
     } catch (error) {
+      // Existing error handling remains the same
       if (error.name === "AbortError") {
         messageElement.querySelector(".fini-message-content").textContent =
           "Response Stopped...";
         console.log("Stream was aborted by user.");
       } else {
         console.error("Error:", error);
-  
         messageElement.querySelector(".fini-message-content").textContent =
           "Sorry, there was an error processing your request. Please try again later.";
       }
     }
   }
-
-
-
-  function logout() {
-    msalInstance.logout();
-  }
-  async function createChatWidget() {
-    let response =await persona();
-    const validatedLogo = await validateLogo(branding.logo);
  
+  async function createChatWidget() {
+    const validatedLogo = await validateLogo(branding.logo);
+    await persona();
     // Create launcher
     const launcher = d.createElement("div");
     launcher.className = "fini-widget-base fini-chat-launcher";
@@ -591,7 +509,7 @@ let abortController;
     chatContainer.innerHTML = `
       <div class="fini-chat-header">
         <img src="${validatedLogo}" alt="Assistant" class="fini-chat-avatar">
-        <label class="ask-intellient-title">Ask Intellient</label>
+           <label class="ask-intellient-title">Ask Intellient</label>
         <div class="fini-chat-close">
           <svg viewBox="0 0 24 24">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
@@ -655,7 +573,6 @@ let abortController;
     stopButton.style.display = "none";
  
     async function sendMessage() {
-      //login();
       let intellibotName = "";
       const tagContainer = document.getElementById("tag-container");
       const tags = tagContainer.getElementsByClassName("tag");
@@ -680,22 +597,9 @@ let abortController;
         // Add assistant message
         const assistantMessage = addMessage("", false);
         console.log("assistantMessage", assistantMessage);
-        // console.log("accounts", accounts);
  
-        //if (checkLoginStatus()) {
-          await streamFromAzureOpenAI(
-            message,
-            assistantMessage,
-            "Context-Scraper"
-          );
-        // } else {
-        //   try {
-        //     instance.loginPopup();
-        //   } catch {
-        //     console.log("login error");
-        //   }
-        // }
-        // addMessage("", true);
+        await streamFromAzureOpenAI(message, assistantMessage, "QudraInfo");
+ 
         messageInput.disabled = false;
         sendButton.disabled = false;
         sendButton.style.display = "flex";
@@ -709,53 +613,6 @@ let abortController;
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
-      }
-    });
- 
-    messageInput.addEventListener("input", async () => {
-      const message = messageInput.value.trim();
- 
-      // Check if the input contains a name or meets specific conditions
-      if (message) {
-        if (message.includes("@")) {
-          // let response = await persona();
- 
-          const data = response.response;
-          console.log("intellibot resposnes", data); // Replace with the actual function you want to call
-          nameDropdown.innerHTML = "";
-          nameDropdown.style.display = "block";
-          data.forEach((item) => {
-            const nameItem = document.createElement("div");
-            nameItem.textContent = item.name; // Assuming 'name' is the field you want to display
-            nameItem.style.padding = "8px";
-            nameItem.style.cursor = "pointer";
- 
-            // Add click event to insert the name into the input field
-            nameItem.addEventListener("click", () => {
-              const tagName = item.name; // Get the name from the item
-              // Create a tag element
-              const tagElement = document.createElement("span");
-              tagElement.className = "tag"; // You can style this class in your CSS
-              tagElement.textContent = `@${tagName}`;
- 
-              // Append the tag to the chat container (or wherever you want)
-              const tagContainer = document.getElementById("tag-container");
-              tagContainer.appendChild(tagElement);
- 
-              // Optionally, you can add functionality to remove the tag if needed
-              tagElement.addEventListener("click", () => {
-                tagContainer.removeChild(tagElement);
-              });
- 
-              messageInput.value = ""; // Clear the input field
-              nameDropdown.style.display = "none";
-            });
- 
-            nameDropdown.appendChild(nameItem);
-          });
-        }
-      } else {
-        nameDropdown.style.display = "none";
       }
     });
  
@@ -819,4 +676,5 @@ let abortController;
   if (mode === "widget") {
     createChatWidget();
   }
-})(window, document); 
+})(window, document);
+ 
