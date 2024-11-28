@@ -380,40 +380,76 @@ let abortController;
   }
 
   // New function to scrape website content
-   // Enhanced website content scraping function
-   async function scrapeWebsiteContent(url) {
+  async function scrapeWebsiteContent(url) {
     try {
-      // Attempt to extract main content using common selectors
-      const contentSelectors = [
-        'main', 
-        'article', 
-        '.content', 
-        '#content', 
-        'body'
+      // Enhanced content search strategies
+      const contentSearchStrategies = [
+        // Direct text search across the entire document
+        () => {
+          const pageText = document.body.innerText || document.body.textContent;
+          return pageText;
+        },
+        
+        // Search for specific elements with potential content
+        () => {
+          const contentElements = [
+            ...document.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, span')
+          ];
+          return contentElements
+            .map(el => el.innerText || el.textContent)
+            .join(' ');
+        },
+        
+        // More aggressive text extraction
+        () => {
+          const walker = document.createTreeWalker(
+            document.body, 
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+          );
+  
+          let text = '';
+          while(walker.nextNode()) {
+            text += walker.currentNode.textContent + ' ';
+          }
+          return text;
+        }
       ];
-
+  
+      // Try each content search strategy
       let scrapedContent = '';
-      
-      for (const selector of contentSelectors) {
-        const element = document.querySelector(selector);
-        if (element) {
-          scrapedContent = element.innerText;
-          break;
+      for (const strategy of contentSearchStrategies) {
+        try {
+          scrapedContent = strategy();
+          if (scrapedContent && scrapedContent.trim().length > 0) break;
+        } catch (error) {
+          console.warn('Content extraction strategy failed:', error);
         }
       }
-
-      // Limit content length
-      const maxContentLength = 3000;
-      scrapedContent = scrapedContent.length > maxContentLength 
-        ? scrapedContent.substring(0, maxContentLength) 
-        : scrapedContent;
-
-      // Remove excess whitespace
-      scrapedContent = scrapedContent.replace(/\s+/g, ' ').trim();
-
-      return scrapedContent;
+  
+      // Clean and prepare content
+      scrapedContent = scrapedContent
+        .replace(/\s+/g, ' ')  // Normalize whitespace
+        .replace(/[^\w\s.,!?]/g, '')  // Remove special characters
+        .trim()
+        .substring(0, 5000);  // Increased max length for more context
+  
+      // Enhanced logging
+      console.log(`Website Content Extraction Debug:
+        - URL: ${url}
+        - Content Length: ${scrapedContent.length} characters
+        - First 300 chars: ${scrapedContent.substring(0, 300)}...`);
+  
+      // Specific phrase checking
+      const phraseToCheck = 'Welcome to Intellient Chat Widget';
+      const phraseExists = scrapedContent.includes(phraseToCheck);
+      
+      console.log(`Phrase "${phraseToCheck}" exists: ${phraseExists}`);
+  
+      return scrapedContent || '';
     } catch (error) {
-      console.error('Client-side website scraping error:', error);
+      console.error('Advanced website content scraping error:', error);
       return '';
     }
   }
@@ -534,6 +570,7 @@ let abortController;
     msalInstance.logout();
   }
   async function createChatWidget() {
+    let response =await persona();
     const validatedLogo = await validateLogo(branding.logo);
  
     // Create launcher
@@ -642,7 +679,7 @@ let abortController;
           await streamFromAzureOpenAI(
             message,
             assistantMessage,
-            intellibotName
+            "Context-Scraper"
           );
         // } else {
         //   try {
@@ -674,7 +711,7 @@ let abortController;
       // Check if the input contains a name or meets specific conditions
       if (message) {
         if (message.includes("@")) {
-          let response = await persona();
+          // let response = await persona();
  
           const data = response.response;
           console.log("intellibot resposnes", data); // Replace with the actual function you want to call
