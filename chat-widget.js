@@ -1,45 +1,67 @@
 (function (w, d) {
-  // BaseLoader for Web Content Processing
-  class BaseLoader {
+  // Enhanced WebBaseLoader with Embedding Generation
+  class WebBaseLoader {
     constructor(url, options = {}) {
       this.url = url;
       this.options = {
-        maxTokens: options.maxTokens || 2000,
-        chunkSize: options.chunkSize || 500
+        maxLength: options.maxLength || 5000,
+        chunkSize: options.chunkSize || 200,
+        overlapSize: options.overlapSize || 50
       };
     }
 
-    async load() {
+    async loadContent() {
       try {
         const response = await fetch(this.url);
         const html = await response.text();
-        const text = this.extractText(html);
-        const cleanedText = this.cleanText(text);
-        const chunks = this.splitTextIntoChunks(cleanedText);
-        const embeddings = await this.createEmbeddings(chunks);
         
-        return { text, chunks, embeddings };
+        // Create temporary DOM parser
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        // Extract and clean text
+        const rawText = this.extractCleanText(doc);
+        const chunks = this.splitTextIntoChunks(rawText);
+        const embeddings = await this.generateEmbeddings(chunks);
+        
+        return { 
+          fullText: rawText, 
+          chunks, 
+          embeddings 
+        };
       } catch (error) {
-        console.error('Base Loader Error:', error);
-        return { text: '', chunks: [], embeddings: [] };
+        console.error('Web Content Loading Error:', error);
+        return { fullText: '', chunks: [], embeddings: [] };
       }
     }
 
-    extractText(html) {
-      const tempDiv = d.createElement('div');
-      tempDiv.innerHTML = html;
-      const textElements = tempDiv.querySelectorAll('p, h1, h2, h3, h4, h5, h6');
-      return Array.from(textElements)
-        .map(el => el.textContent)
-        .join(' ')
-        .substring(0, this.options.maxTokens);
-    }
+    extractCleanText(doc) {
+      // Remove script, style, navigation elements
+      const excludeSelectors = [
+        'script', 'style', 'nav', 'header', 'footer', 
+        'svg', 'input', 'select', 'textarea', 'button'
+      ];
+      excludeSelectors.forEach(selector => 
+        doc.querySelectorAll(selector).forEach(el => el.remove())
+      );
 
-    cleanText(text) {
-      return text
-        .replace(/\s+/g, ' ')  // Remove extra whitespaces
+      // Extract text from meaningful elements
+      const textElements = doc.querySelectorAll(
+        'p, h1, h2, h3, h4, h5, h6, li, article, section, div'
+      );
+      
+      const texts = Array.from(textElements)
+        .map(el => el.textContent.trim())
+        .filter(text => text.length > 0);
+
+      // Clean and preprocess text
+      const cleanedText = texts.join(' ')
+        .replace(/\s+/g, ' ')  // Normalize whitespace
         .replace(/[^\w\s.,!?]/g, '')  // Remove special characters
-        .trim();
+        .trim()
+        .substring(0, this.options.maxLength);
+
+      return cleanedText;
     }
 
     splitTextIntoChunks(text) {
@@ -47,28 +69,30 @@
       const chunks = [];
       
       for (let i = 0; i < words.length; i += this.options.chunkSize) {
-        chunks.push(words.slice(i, i + this.options.chunkSize).join(' '));
+        const chunk = words
+          .slice(i, i + this.options.chunkSize + this.options.overlapSize)
+          .join(' ');
+        chunks.push(chunk);
       }
-      
+
       return chunks;
     }
 
-    async createEmbeddings(chunks) {
-      // Placeholder for embedding creation
-      // In a real scenario, you'd use an embedding service like OpenAI
+    async generateEmbeddings(chunks) {
+      // Placeholder for actual embedding generation
+      // In a real implementation, you'd use an embedding service
       return chunks.map((chunk, index) => ({
-        id: index,
-        text: chunk,
-        vector: this.generateDummyVector(chunk)
+        chunkId: index,
+        embedding: this.simpleEmbedding(chunk)
       }));
     }
 
-    generateDummyVector(text) {
-      // Simple deterministic "embedding" for demonstration
-      const hash = text.split('').reduce((acc, char) => 
-        ((acc << 5) - acc) + char.charCodeAt(0), 0);
-      return new Array(10).fill(0).map((_, i) => 
-        Math.sin(hash + i) * 0.5);
+    simpleEmbedding(text) {
+      // Very basic deterministic embedding simulation
+      const hash = text.split('').reduce(
+        (acc, char) => ((acc << 5) - acc) + char.charCodeAt(0), 0
+      );
+      return [hash];
     }
   }
  
@@ -422,27 +446,23 @@ let abortController;
   // Modify existing scrapeWebsiteContent function
   async function scrapeWebsiteContent(url) {
     try {
-      const loader = new BaseLoader(url);
-      const { text, chunks, embeddings } = await loader.load();
+      const loader = new WebBaseLoader(url);
+      const { fullText, chunks, embeddings } = await loader.loadContent();
 
-      console.log('Web Content Processing:', {
-        totalLength: text.length,
-        chunks: chunks.length,
-        embeddingsGenerated: embeddings.length
-      });
+      console.log(`Website Content Extraction:
+        - URL: ${url}
+        - Total Content Length: ${fullText.length} characters
+        - Number of Chunks: ${chunks.length}`);
 
-      return {
-        fullText: text,
-        chunks,
-        embeddings
-      };
+      return { fullText, chunks, embeddings };
     } catch (error) {
-      console.error('Content Loading Error:', error);
+      console.error('Web content loading error:', error);
       return { fullText: '', chunks: [], embeddings: [] };
     }
   }
 
-  // Existing streamFromAzureOpenAI function remains similar
+  
+  // Modified streamFromAzureOpenAI function remains the same as in your original code
   async function streamFromAzureOpenAI(
     userMessage,
     messageElement,
@@ -455,9 +475,10 @@ let abortController;
   
     const { fullText, chunks, embeddings } = await scrapeWebsiteContent(currentWebsiteUrl);
   
+    // Enhanced context-aware prompt
     const contextAwarePrompt = fullText 
       ? `Context from ${currentWebsiteUrl}: ${fullText}\n\n` +
-        `Relevant Chunks: ${chunks.join(' | ')}\n\n` +
+        `Chunk Contexts: ${chunks.slice(0, 3).join(' | ')}\n\n` +
         `User Query: ${userMessage}`
       : userMessage;
   
