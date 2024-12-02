@@ -1,20 +1,17 @@
 (function (w, d) {
-  // Text Embedding Utility
+  // Text Embedding Utility (Existing implementation)
   class TextEmbedding {
     constructor(maxTokens = 5000) {
       this.maxTokens = maxTokens;
     }
 
-    // Basic text preprocessing and chunking
     preprocessAndChunk(text) {
-      // Clean and preprocess text
       const cleanedText = text
-        .replace(/\s+/g, ' ')  // Normalize whitespace
-        .replace(/[^\w\s.,!?]/g, '')  // Remove special characters
+        .replace(/\s+/g, ' ')
+        .replace(/[^\w\s.,!?]/g, '')
         .trim()
         .substring(0, this.maxTokens);
 
-      // Simple chunking strategy
       const chunkSize = 500;
       const chunks = [];
       for (let i = 0; i < cleanedText.length; i += chunkSize) {
@@ -24,101 +21,130 @@
       return chunks;
     }
 
-    // Placeholder for actual embedding generation
     async generateEmbeddings(chunks) {
-      // In a real implementation, this would call an embedding API
       return chunks.map((chunk, index) => ({
         chunkId: index,
         vector: this.simpleEmbeddingVector(chunk)
       }));
     }
 
-    // Simple embedding vector generation (mock implementation)
     simpleEmbeddingVector(text) {
-      // Basic vector generation based on text characteristics
       return text.split('').map(char => char.charCodeAt(0))
-        .slice(0, 128)  // Limit vector size
-        .map(code => code / 255);  // Normalize
+        .slice(0, 128)
+        .map(code => code / 255);
     }
   }
 
-  // Advanced Web Content Loader
-  class WebContentLoader {
-    constructor(url, maxTokens = 5000) {
-      this.url = url;
+  // Enhanced Web Content Loader
+  class EnhancedWebContentLoader {
+    constructor(baseUrl, maxTokens = 5000) {
+      this.baseUrl = baseUrl;
       this.maxTokens = maxTokens;
-      this.embeddingutility = new TextEmbedding(maxTokens);
+      this.embeddingUtility = new TextEmbedding(maxTokens);
     }
 
-    async extractText() {
-      const contentExtractors = [
-        this.extractMainContentBySemantics.bind(this),
-        this.extractTextByElementTypes.bind(this),
-        this.extractTextByTreeWalker.bind(this)
-      ];
+    async extractSiteContent(maxDepth = 3, maxPages = 10) {
+      const siteContent = [];
+      const visitedUrls = new Set();
+      const urlsToVisit = [this.baseUrl];
 
-      let extractedContent = '';
-      for (const extractor of contentExtractors) {
-        extractedContent = await extractor();
-        if (extractedContent && extractedContent.trim().length > 200) break;
+      while (urlsToVisit.length > 0 && 
+             siteContent.length < maxPages && 
+             maxDepth > 0) {
+        const currentUrl = urlsToVisit.shift();
+
+        if (visitedUrls.has(currentUrl)) continue;
+        visitedUrls.add(currentUrl);
+
+        try {
+          const pageContent = await this.extractPageContent(currentUrl);
+          
+          if (pageContent && pageContent.trim().length > 200) {
+            siteContent.push({
+              url: currentUrl,
+              content: pageContent
+            });
+
+            // Extract additional page links
+            const newLinks = await this.extractPageLinks(currentUrl);
+            newLinks.forEach(link => {
+              if (!visitedUrls.has(link) && 
+                  link.startsWith(this.baseUrl) && 
+                  !link.includes('#') && 
+                  !link.endsWith('pdf')) {
+                urlsToVisit.push(link);
+              }
+            });
+          }
+        } catch (error) {
+          console.error(`Error extracting content from ${currentUrl}:`, error);
+        }
+
+        maxDepth--;
       }
 
-      return this.preprocessText(extractedContent);
+      return siteContent;
     }
 
-    async extractMainContentBySemantics() {
-      const contentSelectors = [
+    async extractPageContent(url) {
+      try {
+        // Fetch page content 
+        const response = await fetch(url);
+        const htmlContent = await response.text();
+
+        // Create a temporary DOM to parse content
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = htmlContent;
+
+        const contentLoaders = [
+          this.extractMainContentBySemantics.bind(this, tempDiv),
+          this.extractTextByElementTypes.bind(this, tempDiv),
+          this.extractTextByTreeWalker.bind(this, tempDiv)
+        ];
+
+        let extractedContent = '';
+        for (const loader of contentLoaders) {
+          extractedContent = loader();
+          if (extractedContent && extractedContent.trim().length > 200) break;
+        }
+
+        return this.preprocessText(extractedContent);
+      } catch (error) {
+        console.error(`Content extraction failed for ${url}:`, error);
+        return '';
+      }
+    }
+
+    async extractPageLinks(url) {
+      try {
+        const response = await fetch(url);
+        const htmlContent = await response.text();
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = htmlContent;
+
+        const links = Array.from(tempDiv.querySelectorAll('a'))
+          .map(a => a.href)
+          .filter(href => href.startsWith('http'));
+
+        return [...new Set(links)];
+      } catch {
+        return [];
+      }
+    }
+
+    extractMainContentBySemantics(contextElement) {
+      const selectors = [
         'main', 'article', '.content', '#content', 
         '.main-content', 'body'
       ];
 
-      for (const selector of contentSelectors) {
-        const contentElement = document.querySelector(selector);
+      for (const selector of selectors) {
+        const contentElement = contextElement.querySelector(selector);
         if (contentElement) {
           return contentElement.innerText || contentElement.textContent;
         }
       }
-
       return '';
-    }
-
-    async extractTextByElementTypes() {
-      const importantElements = [
-        'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
-        'article', 'section', 'div'
-      ];
-
-      const textParts = [];
-      importantElements.forEach(tag => {
-        const elements = document.getElementsByTagName(tag);
-        Array.from(elements).forEach(el => {
-          const text = el.innerText || el.textContent;
-          if (text.trim().length > 10) {
-            textParts.push(text);
-          }
-        });
-      });
-
-      return textParts.join(' ');
-    }
-
-    async extractTextByTreeWalker() {
-      const walker = document.createTreeWalker(
-        document.body, 
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
-      );
-
-      let text = '';
-      while(walker.nextNode()) {
-        const nodeText = walker.currentNode.textContent.trim();
-        if (nodeText.length > 10) {
-          text += nodeText + ' ';
-        }
-      }
-
-      return text;
     }
 
     preprocessText(text) {
@@ -129,10 +155,12 @@
         .substring(0, this.maxTokens);
     }
 
-    async processContentEmbedding() {
-      const extractedText = await this.extractText();
-      const textChunks = this.embeddingUtility.preprocessAndChunk(extractedText);
-      return await this.embeddingUtility.generateEmbeddings(textChunks);
+    async processMultiPageEmbedding() {
+      const siteContent = await this.extractSiteContent();
+      const allChunks = siteContent.flatMap(page => 
+        this.embeddingUtility.preprocessAndChunk(page.content)
+      );
+      return await this.embeddingUtility.generateEmbeddings(allChunks);
     }
   }
 
@@ -526,23 +554,28 @@ let abortController;
   // Modified scrapeWebsiteContent function
   async function scrapeWebsiteContent(url) {
     try {
-      const contentLoader = new WebContentLoader(url);
-      const websiteContent = await contentLoader.extractText();
+      const contentLoader = new EnhancedWebContentLoader(url);
+      const multiPageContent = await contentLoader.extractSiteContent();
       
-      console.log(`Web Content Extraction Debug:
-        - URL: ${url}
-        - Content Length: ${websiteContent.length} characters
-        - First 300 chars: ${websiteContent.substring(0, 300)}...`);
+      const combinedContent = multiPageContent
+        .map(page => `Content from ${page.url}: ${page.content}`)
+        .join('\n\n');
 
-      return websiteContent;
+      console.log(`Web Content Extraction Debug:
+        - Base URL: ${url}
+        - Total Pages Extracted: ${multiPageContent.length}
+        - Content Length: ${combinedContent.length} characters
+        - First 300 chars: ${combinedContent.substring(0, 300)}...`);
+
+      return combinedContent;
     } catch (error) {
       console.error('Advanced website content scraping error:', error);
       return '';
     }
   }
   
-  // Modified streamFromAzureOpenAI function remains the same as in your original code
-  async function streamFromAzureOpenAI(
+   // Existing streamFromAzureOpenAI function remains mostly the same
+   async function streamFromAzureOpenAI(
     userMessage,
     messageElement,
     intelliBot
