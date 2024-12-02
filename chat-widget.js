@@ -1,43 +1,111 @@
 (function (w, d) {
-  const msalConfig = {
-    auth: {
-      clientId: "5c366cc7-6259-4ffa-96ab-8b13ac790d67", // Replace with your client ID
-      authority:
-        "https://login.microsoftonline.com/b092f630-a3ad-4610-b96e-4a6c75c2a6cc", // Replace with your tenant ID
-    },
-  };
-  const msalInstance = new msal.PublicClientApplication(msalConfig);
- 
-  async function checkLoginStatus() {
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length > 0) {
-      console.log("User  is already logged in:", accounts);
-      // You can use the first account to get an access token if needed
-      return accounts[0]; // Return the first account
-    } else {
-      console.log("User  is not logged in.");
-      return null; // No accounts found
-    }
-  }
- 
-  async function login() {
-    const existingAccount = await checkLoginStatus();
-    console.log(existingAccount);
- 
-    if (existingAccount) {
-      console.log("Using existing account:", existingAccount);
-      // Optionally, you can acquire a token silently here if needed
-      // e.g., await msalInstance.acquireTokenSilent({ account: existingAccount });
-    } else {
-      try {
-        const loginResponse = await msalInstance.loginPopup();
-        console.log("Login successful", loginResponse);
-        const accessToken = loginResponse.accessToken;
-        // Store the access token or use it as needed
-      } catch (error) {
-        console.error("Login failed", error);
+  // Enhanced website content extraction and processing
+  class WebContentLoader {
+      constructor(url) {
+          this.url = url;
+          this.chunks = [];
+          this.embeddings = [];
       }
-    }
+
+      // Extract text from HTML, handling different scenarios
+      async extractTextFromHTML(html) {
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = html;
+
+          // Advanced text extraction strategy
+          const extractionSelectors = [
+              'main', 'article', '.content', '#content', 
+              '.primary-content', '.page-content', 'body'
+          ];
+
+          let extractedText = '';
+          for (const selector of extractionSelectors) {
+              const element = tempDiv.querySelector(selector);
+              if (element) {
+                  extractedText = element.innerText;
+                  break;
+              }
+          }
+
+          return this.preprocessText(extractedText);
+      }
+
+      // Text preprocessing
+      preprocessText(text) {
+          // Remove excess whitespaces
+          text = text.replace(/\s+/g, ' ').trim();
+
+          // Remove special characters and normalize
+          text = text.replace(/[^\w\s.,\-!?]/g, '');
+
+          return text;
+      }
+
+      // Split text into chunks
+      chunkText(text, chunkSize = 500, overlap = 100) {
+          const chunks = [];
+          const words = text.split(/\s+/);
+
+          for (let i = 0; i < words.length; i += (chunkSize - overlap)) {
+              const chunk = words.slice(i, i + chunkSize).join(' ');
+              chunks.push(chunk);
+          }
+
+          return chunks;
+      }
+
+      // Simple client-side embedding simulation
+      async createEmbeddings(chunks) {
+          // In a real-world scenario, you'd use a more sophisticated embedding method
+          // Here, we're creating a simple representation
+          return chunks.map(chunk => {
+              // Basic embedding simulation: hash of chunk
+              const hash = chunk.split('').reduce((acc, char) => 
+                  ((acc << 5) - acc) + char.charCodeAt(0), 0
+              );
+              return hash;
+          });
+      }
+
+      // Similarity search for retrieving most relevant chunk
+      findMostRelevantChunk(query, chunks, embeddings) {
+          // Simple cosine similarity approximation
+          const queryHash = query.split('').reduce((acc, char) => 
+              ((acc << 5) - acc) + char.charCodeAt(0), 0
+          );
+
+          const similarities = embeddings.map((embedding, index) => ({
+              chunk: chunks[index],
+              similarity: 1 - Math.abs(embedding - queryHash) / Math.max(Math.abs(embedding), Math.abs(queryHash))
+          }));
+
+          return similarities.sort((a, b) => b.similarity - a.similarity)[0].chunk;
+      }
+
+      async load() {
+          try {
+              const response = await fetch(this.url);
+              const html = await response.text();
+
+              const extractedText = await this.extractTextFromHTML(html);
+              this.chunks = this.chunkText(extractedText);
+              this.embeddings = await this.createEmbeddings(this.chunks);
+
+              return {
+                  fullText: extractedText,
+                  chunks: this.chunks,
+                  embeddings: this.embeddings
+              };
+          } catch (error) {
+              console.error('Web Content Loading Error:', error);
+              return null;
+          }
+      }
+
+      retrieveContextForQuery(query) {
+          if (this.chunks.length === 0) return null;
+          return this.findMostRelevantChunk(query, this.chunks, this.embeddings);
+      }
   }
  
   const widgetOptions = w.intellientoptions || { mode: "widget" };
@@ -388,99 +456,45 @@ let abortController;
 
   // New function to scrape website content
   async function scrapeWebsiteContent(url) {
-    try {
-      // Enhanced content search strategies
-      const contentSearchStrategies = [
-        // Direct text search across the entire document
-        () => {
-          const pageText = document.body.innerText || document.body.textContent;
-          return pageText;
-        },
-        
-        // Search for specific elements with potential content
-        () => {
-          const contentElements = [
-            ...document.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, span')
-          ];
-          return contentElements
-            .map(el => el.innerText || el.textContent)
-            .join(' ');
-        },
-        
-        // More aggressive text extraction
-        () => {
-          const walker = document.createTreeWalker(
-            document.body, 
-            NodeFilter.SHOW_TEXT,
-            null,
-            false
-          );
-  
-          let text = '';
-          while(walker.nextNode()) {
-            text += walker.currentNode.textContent + ' ';
-          }
-          return text;
-        }
-      ];
-  
-      // Try each content search strategy
-      let scrapedContent = '';
-      for (const strategy of contentSearchStrategies) {
-        try {
-          scrapedContent = strategy();
-          if (scrapedContent && scrapedContent.trim().length > 0) break;
-        } catch (error) {
-          console.warn('Content extraction strategy failed:', error);
-        }
-      }
-  
-      // Clean and prepare content
-      scrapedContent = scrapedContent
-        .replace(/\s+/g, ' ')  // Normalize whitespace
-        .replace(/[^\w\s.,!?]/g, '')  // Remove special characters
-        .trim()
-        .substring(0, 5000);  // Increased max length for more context
-  
-      // Enhanced logging
-      console.log(`Website Content Extraction Debug:
-        - URL: ${url}
-        - Content Length: ${scrapedContent.length} characters
-        - First 300 chars: ${scrapedContent.substring(0, 300)}...`);
-  
-      // Specific phrase checking
-      const phraseToCheck = 'Welcome to Intellient Chat Widget';
-      const phraseExists = scrapedContent.includes(phraseToCheck);
-      
-      console.log(`Phrase "${phraseToCheck}" exists: ${phraseExists}`);
-  
-      return scrapedContent || '';
-    } catch (error) {
-      console.error('Advanced website content scraping error:', error);
-      return '';
+    // Use WebContentLoader
+    const loader = new WebContentLoader(url);
+    const loadedContent = await loader.load();
+
+    if (!loadedContent) {
+        console.warn('Failed to load website content');
+        return '';
     }
-  }
-  
-  // Modified streamFromAzureOpenAI function remains the same as in your original code
-  async function streamFromAzureOpenAI(
+
+    return loadedContent.fullText;
+}
+
+// Modify streamFromAzureOpenAI to use context retrieval
+async function streamFromAzureOpenAI(
     userMessage,
     messageElement,
     intelliBot
-  ) {
+) {
     abortController = new AbortController();
     const { signal } = abortController;
-  
-    // Attempt to get the current website URL
-    const currentWebsiteUrl = window.location.href;
-  
-    // Scrape website content if applicable
+
+    // Get website URL from widget options
+    const currentWebsiteUrl = w.intellientoptions?.websiteUrl || window.location.href;
+
+    // Scrape and load website content
     const websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
-  
+
+    // Create loader instance for context retrieval
+    const loader = new WebContentLoader(currentWebsiteUrl);
+    await loader.load();
+
+    // Retrieve most relevant context for the query
+    const relevantContext = loader.retrieveContextForQuery(userMessage) || websiteContent;
+
     // Prepare context-aware prompt
-    const contextAwarePrompt = websiteContent 
-      ? `Context from ${currentWebsiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
-      : userMessage;
-  
+    const contextAwarePrompt = relevantContext 
+        ? `Context from ${currentWebsiteUrl}: ${relevantContext}\n\nUser Query: ${userMessage}`
+        : userMessage;
+
     conversationHistory.push({ role: "user", content: contextAwarePrompt });
   
     try {
