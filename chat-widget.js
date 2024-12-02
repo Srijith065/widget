@@ -1,96 +1,129 @@
 // chat-widget.js
 
 (function (w, d) {
-  const msalConfig = {
-    auth: {
-      clientId: "5c366cc7-6259-4ffa-96ab-8b13ac790d67", 
-      authority: "https://login.microsoftonline.com/b092f630-a3ad-4610-b96e-4a6c75c2a6cc",
-    },
-  };
-  const msalInstance = new msal.PublicClientApplication(msalConfig);
+  // Enhanced website content extraction and processing
+  class WebContentLoader {
+      constructor(url) {
+          this.url = url;
+          this.chunks = [];
+          this.embeddings = [];
+      }
 
-  // Enhanced Web Content Loader with Comprehensive Extraction
-  async function extractWebsiteContent(url) {
-      try {
-          // Proxy the request through a CORS-enabled server to avoid cross-origin issues
-          const proxyUrl = `https://cors-anywhere.herokuapp.com/${url}`;
-          
-          const response = await fetch(proxyUrl, {
-              method: 'GET',
-              headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-              }
-          });
+      // Extract text from HTML, handling different scenarios
+      async extractTextFromHTML(html) {
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = html;
 
-          if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const htmlText = await response.text();
-          
-          // Create a temporary DOM parser
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(htmlText, 'text/html');
-
-          // Advanced content extraction strategies
-          const extractionStrategies = [
-              () => {
-                  // Strategy 1: Extract from main content areas
-                  const mainSelectors = [
-                      'main', 
-                      'article', 
-                      '#main-content', 
-                      '.main-content', 
-                      'body > div.content',
-                      '[role="main"]'
-                  ];
-
-                  for (const selector of mainSelectors) {
-                      const element = doc.querySelector(selector);
-                      if (element) {
-                          // Remove script, style, and navigation elements
-                          const elementsToRemove = element.querySelectorAll('script, style, nav, header, footer, .navigation, .menu');
-                          elementsToRemove.forEach(el => el.remove());
-                          
-                          return element.textContent.trim();
-                      }
-                  }
-                  return '';
-              },
-              () => {
-                  // Strategy 2: Fallback to body text with cleaned content
-                  const bodyText = doc.body.textContent || '';
-                  return bodyText
-                      .replace(/\s+/g, ' ')  // Replace multiple spaces
-                      .replace(/[^\w\s.,!?]/g, '')  // Remove special characters
-                      .trim()
-                      .substring(0, 5000);  // Limit to 5000 characters
-              }
+          // Advanced text extraction strategy
+          const extractionSelectors = [
+              'main', 'article', '.content', '#content', 
+              '.primary-content', '.page-content', 'body'
           ];
 
-          // Try extraction strategies
-          for (const strategy of extractionStrategies) {
-              const extractedText = strategy();
-              if (extractedText && extractedText.length > 100) {
-                  return extractedText;
+          let extractedText = '';
+          for (const selector of extractionSelectors) {
+              const element = tempDiv.querySelector(selector);
+              if (element) {
+                  extractedText = element.innerText;
+                  break;
               }
           }
 
-          return 'Unable to extract meaningful content from the website.';
-      } catch (error) {
-          console.error('Advanced web content extraction error:', error);
-          return `Error extracting website content: ${error.message}`;
+          return this.preprocessText(extractedText);
+      }
+
+      // Text preprocessing
+      preprocessText(text) {
+          // Remove excess whitespaces
+          text = text.replace(/\s+/g, ' ').trim();
+
+          // Remove special characters and normalize
+          text = text.replace(/[^\w\s.,\-!?]/g, '');
+
+          return text;
+      }
+
+      // Split text into chunks
+      chunkText(text, chunkSize = 500, overlap = 100) {
+          const chunks = [];
+          const words = text.split(/\s+/);
+
+          for (let i = 0; i < words.length; i += (chunkSize - overlap)) {
+              const chunk = words.slice(i, i + chunkSize).join(' ');
+              chunks.push(chunk);
+          }
+
+          return chunks;
+      }
+
+      // Simple client-side embedding simulation
+      async createEmbeddings(chunks) {
+          // In a real-world scenario, you'd use a more sophisticated embedding method
+          // Here, we're creating a simple representation
+          return chunks.map(chunk => {
+              // Basic embedding simulation: hash of chunk
+              const hash = chunk.split('').reduce((acc, char) => 
+                  ((acc << 5) - acc) + char.charCodeAt(0), 0
+              );
+              return hash;
+          });
+      }
+
+      // Similarity search for retrieving most relevant chunk
+      findMostRelevantChunk(query, chunks, embeddings) {
+          // Simple cosine similarity approximation
+          const queryHash = query.split('').reduce((acc, char) => 
+              ((acc << 5) - acc) + char.charCodeAt(0), 0
+          );
+
+          const similarities = embeddings.map((embedding, index) => ({
+              chunk: chunks[index],
+              similarity: 1 - Math.abs(embedding - queryHash) / Math.max(Math.abs(embedding), Math.abs(queryHash))
+          }));
+
+          return similarities.sort((a, b) => b.similarity - a.similarity)[0].chunk;
+      }
+
+      async load() {
+          try {
+              const response = await fetch(this.url);
+              const html = await response.text();
+
+              const extractedText = await this.extractTextFromHTML(html);
+              this.chunks = this.chunkText(extractedText);
+              this.embeddings = await this.createEmbeddings(this.chunks);
+
+              return {
+                  fullText: extractedText,
+                  chunks: this.chunks,
+                  embeddings: this.embeddings
+              };
+          } catch (error) {
+              console.error('Web Content Loading Error:', error);
+              return null;
+          }
+      }
+
+      retrieveContextForQuery(query) {
+          if (this.chunks.length === 0) return null;
+          return this.findMostRelevantChunk(query, this.chunks, this.embeddings);
       }
   }
+   
+    const widgetOptions = w.intellientoptions || { mode: "widget" };
+    const mode = widgetOptions.mode || "widget";
+    const widgetId = widgetOptions.widgetId;
+    console.log("widgetId", widgetId);
+    console.log(" window.location.href", window.location.href);
    
     // if (widgetId !== window.location.href) {
     //   console.error("Widget ID is required but not provided.");
     //   return; // Prevent further execution
     // }
    
-    // Default branding (rest of the existing code remains the same)
+    // Default branding
     const DEFAULT_LOGO =
-      "https://delightful-beach-07c9da51e.5.azurestaticapps.net/widget-logo.png";
+      "https://delightful-beach-07c9da51e.5.azurestaticapps.net/widget-logo.png"; // Default Logo - Intellient
     const DEFAULT_THEME = {
       primaryColor: "#0084ff",
       secondaryColor: "#f0f2f5",
@@ -98,8 +131,8 @@
         '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     };
    
-     // Get customer branding or use defaults
-     const branding = {
+    // Get customer branding or use defaults
+    const branding = {
       logo: widgetOptions.branding?.logo || DEFAULT_LOGO,
       theme: {
         primaryColor:
@@ -112,7 +145,6 @@
           widgetOptions.branding?.theme?.fontFamily || DEFAULT_THEME.fontFamily,
       },
     };
-
    
     // Styles for the widget
     const styles = `
@@ -380,13 +412,14 @@
     }
    
     // Add this at the top of your script
-    let conversationHistory = [];
-    let personaData = [];
-    let abortController;
-
+  let conversationHistory = [];
+  let personaData = []; // Default empty array
+  let abortController;
+   
     async function persona() {
       try {
         const response = await fetch(
+          // "http://localhost:3000/api/link-widget/intellibots",
           "https://intellientuat.azurewebsites.net/api/link-widget/intellibots",
           {
             method: "GET",
@@ -399,75 +432,69 @@
         console.log("error from persona getmethod");
       }
     }
-    // Markdown to HTML conversion remains the same...
+    // Updated code - Intellient UAT
     function markdownToHtml(markdown) {
+      // Convert **bold** to <strong>
       markdown = markdown.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+   
+      // Convert *italic* to <em>
       markdown = markdown.replace(/\*(.*?)\*/g, "<em>$1</em>");
+   
+      // Convert - list items to <ul><li>
       markdown = markdown.replace(/^\s*-\s+(.*)$/g, "<ul><li>$1</li></ul>");
+   
+      // Handle line breaks
       markdown = markdown.replace(/\n/g, "<br>");
+   
       return markdown;
     }
   
-    // New function to scrape website content
-     // Enhanced website content scraping function
-     async function scrapeWebsiteContent(url) {
-      try {
-        // Attempt to extract main content using common selectors
-        const contentSelectors = [
-          'main', 
-          'article', 
-          '.content', 
-          '#content', 
-          'body'
-        ];
-  
-        let scrapedContent = '';
-        
-        for (const selector of contentSelectors) {
-          const element = document.querySelector(selector);
-          if (element) {
-            scrapedContent = element.innerText;
-            break;
-          }
-        }
-  
-        // Limit content length
-        const maxContentLength = 3000;
-        scrapedContent = scrapedContent.length > maxContentLength 
-          ? scrapedContent.substring(0, maxContentLength) 
-          : scrapedContent;
-  
-        // Remove excess whitespace
-        scrapedContent = scrapedContent.replace(/\s+/g, ' ').trim();
-  
-        return scrapedContent;
-      } catch (error) {
-        console.error('Client-side website scraping error:', error);
-        return '';
+    // Enhanced website content scraping function
+    async function scrapeWebsiteContent(url) {
+      // Use WebContentLoader
+      const loader = new WebContentLoader(url);
+      const loadedContent = await loader.load();
+
+      if (!loadedContent) {
+          console.warn('Failed to load website content');
+          return '';
       }
-    }
-    
-    // Modify streamFromAzureOpenAI to use the new extraction method
-    async function streamFromAzureOpenAI(
+
+      return loadedContent.fullText;
+  }
+
+  // Modify streamFromAzureOpenAI to use context retrieval
+  async function streamFromAzureOpenAI(
       userMessage,
       messageElement,
       intelliBot
-    ) {
+  ) {
       abortController = new AbortController();
       const { signal } = abortController;
-    
-      // Extract website content based on the URL in widget options
-      const websiteContent = await extractWebsiteContent(websiteUrl);
-    
+  
+      // Get website URL from widget options
+      const currentWebsiteUrl = w.intellientoptions?.websiteUrl || window.location.href;
+  
+      // Scrape and load website content
+      const websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
+  
+      // Create loader instance for context retrieval
+      const loader = new WebContentLoader(currentWebsiteUrl);
+      await loader.load();
+  
+      // Retrieve most relevant context for the query
+      const relevantContext = loader.retrieveContextForQuery(userMessage) || websiteContent;
+  
       // Prepare context-aware prompt
-      const contextAwarePrompt = websiteContent 
-        ? `Website Context from ${websiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
-        : userMessage;
-    
+      const contextAwarePrompt = relevantContext 
+          ? `Context from ${currentWebsiteUrl}: ${relevantContext}\n\nUser Query: ${userMessage}`
+          : userMessage;
+  
       conversationHistory.push({ role: "user", content: contextAwarePrompt });
     
       try {
         const response = await fetch(
+            // "http://localhost:3000/api/link-widget",
           "https://intellientuat.azurewebsites.net/api/link-widget",
           {
             method: "POST",
@@ -478,7 +505,7 @@
               userMessage: contextAwarePrompt,
               filteredBot: intelliBot ? personaData.filter((name) => name.name === intelliBot) : null,
               conversationHistory,
-              websiteUrl: websiteUrl
+              websiteUrl: currentWebsiteUrl
             }),
             signal,
           }
@@ -541,13 +568,13 @@
           throw new Error("No content in response");
         }
       } catch (error) {
-        // Error handling remains the same
         if (error.name === "AbortError") {
           messageElement.querySelector(".fini-message-content").textContent =
             "Response Stopped...";
           console.log("Stream was aborted by user.");
         } else {
           console.error("Error:", error);
+    
           messageElement.querySelector(".fini-message-content").textContent =
             "Sorry, there was an error processing your request. Please try again later.";
         }
@@ -797,12 +824,8 @@
       return messageDiv;
     }
    
-// Initialization logic
-const widgetOptions = w.intellientoptions || { mode: "widget" };
-const mode = widgetOptions.mode || "widget";
-const websiteUrl = widgetOptions.websiteUrl || window.location.href;
-
-if (mode === "widget") {
-  createChatWidget();
-}
-})(window, document);
+    // Initialize based on mode
+    if (mode === "widget") {
+      createChatWidget();
+    }
+  })(window, document); 
