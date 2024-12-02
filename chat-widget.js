@@ -16,7 +16,7 @@
       return accounts[0];
     } else {
       console.log("User is not logged in.");
-      return null;WebContentLoader 
+      return null;
     }
   }
  
@@ -37,7 +37,7 @@
     }
   }
 
-  // Enhanced Web Content Loader
+  // Enhanced Web Content Loader with more robust content extraction
   class WebContentLoader {
     constructor(url) {
       this.url = url;
@@ -45,8 +45,11 @@
 
     async load() {
       try {
-        // Fetch the webpage content
-        const response = await fetch(this.url, {
+        // Use a proxy to handle CORS and enable cross-origin requests
+        const proxyUrl = `https://cors-anywhere.herokuapp.com/`;
+        const targetUrl = proxyUrl + this.url;
+
+        const response = await fetch(targetUrl, {
           method: 'GET',
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -63,18 +66,24 @@
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = html;
 
-        // Remove script, style, and navigation elements
-        const elementsToRemove = tempDiv.querySelectorAll('script, style, nav, header, footer, .navigation, .menu, .sidebar');
+        // More comprehensive element removal
+        const elementsToRemove = tempDiv.querySelectorAll(
+          'script, style, nav, header, footer, .navigation, .menu, .sidebar, ' +
+          'aside, .ads, .advertisement, #ads, #advertisement, ' +
+          '.cookie-banner, .popup, .modal, iframe, svg'
+        );
         elementsToRemove.forEach(el => el.remove());
 
-        // Extract text content
+        // Enhanced text extraction
         const textContent = this.extractText(tempDiv);
 
-        // Limit content length
-        const maxContentLength = 3000;
-        return textContent.length > maxContentLength 
-          ? textContent.substring(0, maxContentLength) 
-          : textContent;
+        // More intelligent content trimming
+        const maxContentLength = 5000;
+        const processedContent = this.preprocessContent(textContent);
+        
+        return processedContent.length > maxContentLength 
+          ? processedContent.substring(0, maxContentLength) 
+          : processedContent;
 
       } catch (error) {
         console.error('Web content loading error:', error);
@@ -83,32 +92,42 @@
     }
 
     extractText(element) {
-      // Recursively extract text from an element
       const textParts = [];
       
-      for (const child of element.childNodes) {
-        if (child.nodeType === Node.TEXT_NODE) {
-          // Add text content, trimming and removing excess whitespace
-          const trimmedText = child.textContent.trim().replace(/\s+/g, ' ');
-          if (trimmedText) textParts.push(trimmedText);
-        } else if (child.nodeType === Node.ELEMENT_NODE) {
-          // Recursively extract text from child elements
-          const childText = this.extractText(child);
-          if (childText) textParts.push(childText);
+      const walkNodes = (node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const trimmedText = node.textContent.trim().replace(/\s+/g, ' ');
+          if (trimmedText && trimmedText.length > 10) {
+            textParts.push(trimmedText);
+          }
         }
-      }
+        
+        for (let child of node.childNodes) {
+          walkNodes(child);
+        }
+      };
 
+      walkNodes(element);
       return textParts.join(' ');
     }
 
-    async splitTextIntoChunks(text, chunkSize = 500, overlapSize = 50) {
-      // Simple text chunking method
-      const chunks = [];
-      for (let i = 0; i < text.length; i += (chunkSize - overlapSize)) {
-        const chunk = text.slice(i, i + chunkSize);
-        chunks.push(chunk);
-      }
-      return chunks;
+    preprocessContent(content) {
+      // Remove excessive whitespaces
+      content = content.replace(/\s+/g, ' ').trim();
+      
+      // Remove common noise words and irrelevant sections
+      const noisePatterns = [
+        /copyright.*\d{4}/i,
+        /all\s+rights\s+reserved/i,
+        /privacy\s+policy/i,
+        /terms\s+of\s+service/i
+      ];
+
+      noisePatterns.forEach(pattern => {
+        content = content.replace(pattern, '');
+      });
+
+      return content;
     }
   }
    
@@ -451,14 +470,14 @@
       return markdown;
     }
   
-// Updated scrapeWebsiteContent function
+// Modify scrapeWebsiteContent to use the enhanced WebContentLoader
 async function scrapeWebsiteContent(url) {
   try {
     const loader = new WebContentLoader(url);
     const content = await loader.load();
 
-    // Optional: Split content into chunks if needed for further processing
-    const contentChunks = await loader.splitTextIntoChunks(content);
+    // Optional: Log the extracted content for debugging
+    console.log("Extracted Website Content:", content);
 
     return content;
   } catch (error) {
@@ -466,6 +485,7 @@ async function scrapeWebsiteContent(url) {
     return '';
   }
 }
+
     
 async function streamFromAzureOpenAI(
   userMessage,
