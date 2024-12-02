@@ -1,46 +1,116 @@
 // chat-widget.js
 
 (function (w, d) {
-    const msalConfig = {
-      auth: {
-        clientId: "5c366cc7-6259-4ffa-96ab-8b13ac790d67", // Replace with your client ID
-        authority:
-          "https://login.microsoftonline.com/b092f630-a3ad-4610-b96e-4a6c75c2a6cc", // Replace with your tenant ID
-      },
-    };
-    const msalInstance = new msal.PublicClientApplication(msalConfig);
-   
-    async function checkLoginStatus() {
-      const accounts = msalInstance.getAllAccounts();
-      if (accounts.length > 0) {
-        console.log("User  is already logged in:", accounts);
-        // You can use the first account to get an access token if needed
-        return accounts[0]; // Return the first account
-      } else {
-        console.log("User  is not logged in.");
-        return null; // No accounts found
+  const msalConfig = {
+    auth: {
+      clientId: "5c366cc7-6259-4ffa-96ab-8b13ac790d67", 
+      authority: "https://login.microsoftonline.com/b092f630-a3ad-4610-b96e-4a6c75c2a6cc",
+    },
+  };
+  const msalInstance = new msal.PublicClientApplication(msalConfig);
+ 
+  async function checkLoginStatus() {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+      console.log("User is already logged in:", accounts);
+      return accounts[0];
+    } else {
+      console.log("User is not logged in.");
+      return null;WebContentLoader 
+    }
+  }
+ 
+  async function login() {
+    const existingAccount = await checkLoginStatus();
+    console.log(existingAccount);
+ 
+    if (existingAccount) {
+      console.log("Using existing account:", existingAccount);
+    } else {
+      try {
+        const loginResponse = await msalInstance.loginPopup();
+        console.log("Login successful", loginResponse);
+        const accessToken = loginResponse.accessToken;
+      } catch (error) {
+        console.error("Login failed", error);
       }
     }
-   
-    async function login() {
-      const existingAccount = await checkLoginStatus();
-      console.log(existingAccount);
-   
-      if (existingAccount) {
-        console.log("Using existing account:", existingAccount);
-        // Optionally, you can acquire a token silently here if needed
-        // e.g., await msalInstance.acquireTokenSilent({ account: existingAccount });
-      } else {
-        try {
-          const loginResponse = await msalInstance.loginPopup();
-          console.log("Login successful", loginResponse);
-          const accessToken = loginResponse.accessToken;
-          // Store the access token or use it as needed
-        } catch (error) {
-          console.error("Login failed", error);
+  }
+
+  // Enhanced Web Content Loader
+  class WebContentLoader {
+    constructor(url) {
+      this.url = url;
+    }
+
+    async load() {
+      try {
+        // Fetch the webpage content
+        const response = await fetch(this.url, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const html = await response.text();
+        
+        // Create a temporary div to parse HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+
+        // Remove script, style, and navigation elements
+        const elementsToRemove = tempDiv.querySelectorAll('script, style, nav, header, footer, .navigation, .menu, .sidebar');
+        elementsToRemove.forEach(el => el.remove());
+
+        // Extract text content
+        const textContent = this.extractText(tempDiv);
+
+        // Limit content length
+        const maxContentLength = 3000;
+        return textContent.length > maxContentLength 
+          ? textContent.substring(0, maxContentLength) 
+          : textContent;
+
+      } catch (error) {
+        console.error('Web content loading error:', error);
+        return '';
+      }
+    }
+
+    extractText(element) {
+      // Recursively extract text from an element
+      const textParts = [];
+      
+      for (const child of element.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          // Add text content, trimming and removing excess whitespace
+          const trimmedText = child.textContent.trim().replace(/\s+/g, ' ');
+          if (trimmedText) textParts.push(trimmedText);
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+          // Recursively extract text from child elements
+          const childText = this.extractText(child);
+          if (childText) textParts.push(childText);
         }
       }
+
+      return textParts.join(' ');
     }
+
+    async splitTextIntoChunks(text, chunkSize = 500, overlapSize = 50) {
+      // Simple text chunking method
+      const chunks = [];
+      for (let i = 0; i < text.length; i += (chunkSize - overlapSize)) {
+        const chunk = text.slice(i, i + chunkSize);
+        chunks.push(chunk);
+      }
+      return chunks;
+    }
+  }
    
     const widgetOptions = w.intellientoptions || { mode: "widget" };
     const mode = widgetOptions.mode || "widget";
@@ -351,7 +421,7 @@
     async function persona() {
       try {
         const response = await fetch(
-          //"http://localhost:3000/api/link-widget/intellibots",
+          // "http://localhost:3000/api/link-widget/intellibots",
           "https://intellientuat.azurewebsites.net/api/link-widget/intellibots",
           {
             method: "GET",
@@ -381,69 +451,46 @@
       return markdown;
     }
   
-    // New function to scrape website content
-     // Enhanced website content scraping function
-     async function scrapeWebsiteContent(url) {
-      try {
-        // Attempt to extract main content using common selectors
-        const contentSelectors = [
-          'main', 
-          'article', 
-          '.content', 
-          '#content', 
-          'body'
-        ];
-  
-        let scrapedContent = '';
-        
-        for (const selector of contentSelectors) {
-          const element = document.querySelector(selector);
-          if (element) {
-            scrapedContent = element.innerText;
-            break;
-          }
-        }
-  
-        // Limit content length
-        const maxContentLength = 3000;
-        scrapedContent = scrapedContent.length > maxContentLength 
-          ? scrapedContent.substring(0, maxContentLength) 
-          : scrapedContent;
-  
-        // Remove excess whitespace
-        scrapedContent = scrapedContent.replace(/\s+/g, ' ').trim();
-  
-        return scrapedContent;
-      } catch (error) {
-        console.error('Client-side website scraping error:', error);
-        return '';
-      }
-    }
+// Updated scrapeWebsiteContent function
+async function scrapeWebsiteContent(url) {
+  try {
+    const loader = new WebContentLoader(url);
+    const content = await loader.load();
+
+    // Optional: Split content into chunks if needed for further processing
+    const contentChunks = await loader.splitTextIntoChunks(content);
+
+    return content;
+  } catch (error) {
+    console.error('Website content loading error:', error);
+    return '';
+  }
+}
     
-    // Modified streamFromAzureOpenAI function remains the same as in your original code
-    async function streamFromAzureOpenAI(
-      userMessage,
-      messageElement,
-      intelliBot
-    ) {
-      abortController = new AbortController();
-      const { signal } = abortController;
-    
-      // Attempt to get the current website URL
-      const currentWebsiteUrl = window.location.href;
-    
-      // Scrape website content if applicable
-      const websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
-    
-      // Prepare context-aware prompt
-      const contextAwarePrompt = websiteContent 
-        ? `Context from ${currentWebsiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
-        : userMessage;
-    
-      conversationHistory.push({ role: "user", content: contextAwarePrompt });
+async function streamFromAzureOpenAI(
+  userMessage,
+  messageElement,
+  intelliBot
+) {
+  abortController = new AbortController();
+  const { signal } = abortController;
+
+  // Attempt to get the current website URL
+  const currentWebsiteUrl = window.location.href;
+
+  // Scrape website content if applicable
+  const websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
+
+  // Prepare context-aware prompt
+  const contextAwarePrompt = websiteContent 
+    ? `Context from ${currentWebsiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
+    : userMessage;
+
+  conversationHistory.push({ role: "user", content: contextAwarePrompt });
     
       try {
         const response = await fetch(
+            // "http://localhost:3000/api/link-widget",
           "https://intellientuat.azurewebsites.net/api/link-widget",
           {
             method: "POST",
