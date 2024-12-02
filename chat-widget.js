@@ -4,7 +4,8 @@
   const msalConfig = {
     auth: {
       clientId: "5c366cc7-6259-4ffa-96ab-8b13ac790d67", 
-      authority: "https://login.microsoftonline.com/b092f630-a3ad-4610-b96e-4a6c75c2a6cc",
+      authority:
+        "https://login.microsoftonline.com/b092f630-a3ad-4610-b96e-4a6c75c2a6cc", 
     },
   };
   const msalInstance = new msal.PublicClientApplication(msalConfig);
@@ -36,115 +37,77 @@
       }
     }
   }
+ 
+  const widgetOptions = w.intellientoptions || { mode: "widget" };
+  const mode = widgetOptions.mode || "widget";
+  const widgetId = widgetOptions.widgetId;
+  const websiteUrl = widgetOptions.websiteUrl || window.location.href;
 
-  // Enhanced Web Content Loader with more robust content extraction
-  class WebContentLoader {
-    constructor(url) {
-      this.url = url;
-    }
+  // Enhanced website content loader with advanced extraction strategies
+  async function advancedWebContentLoader(url) {
+    try {
+        // Fetch the HTML content
+        const response = await fetch(url);
+        const htmlText = await response.text();
 
-    async load() {
-      try {
-        // Use a proxy to handle CORS and enable cross-origin requests
-        const proxyUrl = `https://cors-anywhere.herokuapp.com/`;
-        const targetUrl = proxyUrl + this.url;
-
-        const response = await fetch(targetUrl, {
-          method: 'GET',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const html = await response.text();
-        
-        // Create a temporary div to parse HTML
+        // Create a temporary DOM element to parse HTML
         const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
+        tempDiv.innerHTML = htmlText;
 
-        // More comprehensive element removal
-        const elementsToRemove = tempDiv.querySelectorAll(
-          'script, style, nav, header, footer, .navigation, .menu, .sidebar, ' +
-          'aside, .ads, .advertisement, #ads, #advertisement, ' +
-          '.cookie-banner, .popup, .modal, iframe, svg'
-        );
-        elementsToRemove.forEach(el => el.remove());
+        // Extraction strategies
+        const extractionStrategies = [
+            () => {
+                // Strategy 1: Extract from semantic content tags
+                const semanticSelectors = [
+                    'article', 'main', 'section', 
+                    '[role="main"]', '.content', 
+                    '#content', 'body'
+                ];
+                
+                for (const selector of semanticSelectors) {
+                    const element = tempDiv.querySelector(selector);
+                    if (element) return element.innerText;
+                }
+                return '';
+            },
+            () => {
+                // Strategy 2: Remove non-content elements
+                const elementsToRemove = tempDiv.querySelectorAll(
+                    'script, style, nav, header, footer, .navigation, .menu'
+                );
+                elementsToRemove.forEach(el => el.remove());
+                return tempDiv.innerText;
+            }
+        ];
 
-        // Enhanced text extraction
-        const textContent = this.extractText(tempDiv);
+        // Apply extraction strategies
+        for (const strategy of extractionStrategies) {
+            const extractedText = strategy();
+            if (extractedText && extractedText.trim().length > 100) {
+                // Text cleaning and preprocessing
+                return extractedText
+                    .replace(/\s+/g, ' ') // Remove extra whitespaces
+                    .replace(/[^\w\s.,!?]/g, '') // Remove special characters
+                    .trim()
+                    .substring(0, 5000); // Limit to 5000 characters
+            }
+        }
 
-        // More intelligent content trimming
-        const maxContentLength = 5000;
-        const processedContent = this.preprocessContent(textContent);
-        
-        return processedContent.length > maxContentLength 
-          ? processedContent.substring(0, maxContentLength) 
-          : processedContent;
-
-      } catch (error) {
-        console.error('Web content loading error:', error);
+        return 'Unable to extract meaningful content from the website.';
+    } catch (error) {
+        console.error('Advanced web content loading error:', error);
         return '';
-      }
     }
-
-    extractText(element) {
-      const textParts = [];
-      
-      const walkNodes = (node) => {
-        if (node.nodeType === Node.TEXT_NODE) {
-          const trimmedText = node.textContent.trim().replace(/\s+/g, ' ');
-          if (trimmedText && trimmedText.length > 10) {
-            textParts.push(trimmedText);
-          }
-        }
-        
-        for (let child of node.childNodes) {
-          walkNodes(child);
-        }
-      };
-
-      walkNodes(element);
-      return textParts.join(' ');
-    }
-
-    preprocessContent(content) {
-      // Remove excessive whitespaces
-      content = content.replace(/\s+/g, ' ').trim();
-      
-      // Remove common noise words and irrelevant sections
-      const noisePatterns = [
-        /copyright.*\d{4}/i,
-        /all\s+rights\s+reserved/i,
-        /privacy\s+policy/i,
-        /terms\s+of\s+service/i
-      ];
-
-      noisePatterns.forEach(pattern => {
-        content = content.replace(pattern, '');
-      });
-
-      return content;
-    }
-  }
-   
-    const widgetOptions = w.intellientoptions || { mode: "widget" };
-    const mode = widgetOptions.mode || "widget";
-    const widgetId = widgetOptions.widgetId;
-    console.log("widgetId", widgetId);
-    console.log(" window.location.href", window.location.href);
+}
    
     // if (widgetId !== window.location.href) {
     //   console.error("Widget ID is required but not provided.");
     //   return; // Prevent further execution
     // }
    
-    // Default branding
+    // Default branding (rest of the existing code remains the same)
     const DEFAULT_LOGO =
-      "https://delightful-beach-07c9da51e.5.azurestaticapps.net/widget-logo.png"; // Default Logo - Intellient
+      "https://delightful-beach-07c9da51e.5.azurestaticapps.net/widget-logo.png";
     const DEFAULT_THEME = {
       primaryColor: "#0084ff",
       secondaryColor: "#f0f2f5",
@@ -152,8 +115,8 @@
         '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     };
    
-    // Get customer branding or use defaults
-    const branding = {
+     // Get customer branding or use defaults
+     const branding = {
       logo: widgetOptions.branding?.logo || DEFAULT_LOGO,
       theme: {
         primaryColor:
@@ -166,6 +129,7 @@
           widgetOptions.branding?.theme?.fontFamily || DEFAULT_THEME.fontFamily,
       },
     };
+
    
     // Styles for the widget
     const styles = `
@@ -433,14 +397,13 @@
     }
    
     // Add this at the top of your script
-  let conversationHistory = [];
-  let personaData = []; // Default empty array
-  let abortController;
-   
+    let conversationHistory = [];
+    let personaData = [];
+    let abortController;
+
     async function persona() {
       try {
         const response = await fetch(
-          // "http://localhost:3000/api/link-widget/intellibots",
           "https://intellientuat.azurewebsites.net/api/link-widget/intellibots",
           {
             method: "GET",
@@ -453,64 +416,75 @@
         console.log("error from persona getmethod");
       }
     }
-    // Updated code - Intellient UAT
+    // Markdown to HTML conversion remains the same...
     function markdownToHtml(markdown) {
-      // Convert **bold** to <strong>
       markdown = markdown.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-   
-      // Convert *italic* to <em>
       markdown = markdown.replace(/\*(.*?)\*/g, "<em>$1</em>");
-   
-      // Convert - list items to <ul><li>
       markdown = markdown.replace(/^\s*-\s+(.*)$/g, "<ul><li>$1</li></ul>");
-   
-      // Handle line breaks
       markdown = markdown.replace(/\n/g, "<br>");
-   
       return markdown;
     }
   
-// Modify scrapeWebsiteContent to use the enhanced WebContentLoader
-async function scrapeWebsiteContent(url) {
-  try {
-    const loader = new WebContentLoader(url);
-    const content = await loader.load();
-
-    // Optional: Log the extracted content for debugging
-    console.log("Extracted Website Content:", content);
-
-    return content;
-  } catch (error) {
-    console.error('Website content loading error:', error);
-    return '';
-  }
-}
-
+    // New function to scrape website content
+     // Enhanced website content scraping function
+     async function scrapeWebsiteContent(url) {
+      try {
+        // Attempt to extract main content using common selectors
+        const contentSelectors = [
+          'main', 
+          'article', 
+          '.content', 
+          '#content', 
+          'body'
+        ];
+  
+        let scrapedContent = '';
+        
+        for (const selector of contentSelectors) {
+          const element = document.querySelector(selector);
+          if (element) {
+            scrapedContent = element.innerText;
+            break;
+          }
+        }
+  
+        // Limit content length
+        const maxContentLength = 3000;
+        scrapedContent = scrapedContent.length > maxContentLength 
+          ? scrapedContent.substring(0, maxContentLength) 
+          : scrapedContent;
+  
+        // Remove excess whitespace
+        scrapedContent = scrapedContent.replace(/\s+/g, ' ').trim();
+  
+        return scrapedContent;
+      } catch (error) {
+        console.error('Client-side website scraping error:', error);
+        return '';
+      }
+    }
     
-async function streamFromAzureOpenAI(
-  userMessage,
-  messageElement,
-  intelliBot
-) {
-  abortController = new AbortController();
-  const { signal } = abortController;
-
-  // Attempt to get the current website URL
-  const currentWebsiteUrl = window.location.href;
-
-  // Scrape website content if applicable
-  const websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
-
-  // Prepare context-aware prompt
-  const contextAwarePrompt = websiteContent 
-    ? `Context from ${currentWebsiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
-    : userMessage;
-
-  conversationHistory.push({ role: "user", content: contextAwarePrompt });
+    // Modified streamFromAzureOpenAI function remains the same as in your original code
+    async function streamFromAzureOpenAI(
+      userMessage,
+      messageElement,
+      intelliBot
+    ) {
+      abortController = new AbortController();
+      const { signal } = abortController;
+    
+      // Use advanced web content loader
+      const websiteContent = await advancedWebContentLoader(websiteUrl);
+    
+      // Prepare context-aware prompt
+      const contextAwarePrompt = websiteContent 
+        ? `Context from ${websiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
+        : userMessage;
+    
+      conversationHistory.push({ role: "user", content: contextAwarePrompt });
     
       try {
         const response = await fetch(
-            // "http://localhost:3000/api/link-widget",
           "https://intellientuat.azurewebsites.net/api/link-widget",
           {
             method: "POST",
@@ -521,7 +495,7 @@ async function streamFromAzureOpenAI(
               userMessage: contextAwarePrompt,
               filteredBot: intelliBot ? personaData.filter((name) => name.name === intelliBot) : null,
               conversationHistory,
-              websiteUrl: currentWebsiteUrl
+              websiteUrl: websiteUrl
             }),
             signal,
           }
@@ -584,13 +558,13 @@ async function streamFromAzureOpenAI(
           throw new Error("No content in response");
         }
       } catch (error) {
+        // Error handling remains the same
         if (error.name === "AbortError") {
           messageElement.querySelector(".fini-message-content").textContent =
             "Response Stopped...";
           console.log("Stream was aborted by user.");
         } else {
           console.error("Error:", error);
-    
           messageElement.querySelector(".fini-message-content").textContent =
             "Sorry, there was an error processing your request. Please try again later.";
         }
@@ -844,4 +818,4 @@ async function streamFromAzureOpenAI(
     if (mode === "widget") {
       createChatWidget();
     }
-  })(window, document); 
+  })(window, document);
