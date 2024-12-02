@@ -1,98 +1,66 @@
 (function (w, d) {
-  // Enhanced WebBaseLoader with Embedding Generation
-  class WebBaseLoader {
-    constructor(url, options = {}) {
+  // Utility function for text cleaning and preprocessing
+  function cleanText(text) {
+    return text
+      .replace(/\s+/g, ' ')  // Normalize whitespace
+      .replace(/[^\w\s.,!?]/g, '')  // Remove special characters
+      .trim()
+      .substring(0, 10000);  // Limit text length
+  }
+
+  // Advanced Web Content Loader
+  class WebContentLoader {
+    constructor(url) {
       this.url = url;
-      this.options = {
-        maxLength: options.maxLength || 5000,
-        chunkSize: options.chunkSize || 200,
-        overlapSize: options.overlapSize || 50
-      };
+      this.chunks = [];
     }
 
-    async loadContent() {
+    async load() {
       try {
+        // Fetch HTML content
         const response = await fetch(this.url);
         const html = await response.text();
-        
-        // Create temporary DOM parser
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        
-        // Extract and clean text
-        const rawText = this.extractCleanText(doc);
-        const chunks = this.splitTextIntoChunks(rawText);
-        const embeddings = await this.generateEmbeddings(chunks);
-        
-        return { 
-          fullText: rawText, 
-          chunks, 
-          embeddings 
-        };
-      } catch (error) {
-        console.error('Web Content Loading Error:', error);
-        return { fullText: '', chunks: [], embeddings: [] };
-      }
-    }
 
-    extractCleanText(doc) {
-      // Remove script, style, navigation elements
-      const excludeSelectors = [
-        'script', 'style', 'nav', 'header', 'footer', 
-        'svg', 'input', 'select', 'textarea', 'button'
-      ];
-      excludeSelectors.forEach(selector => 
-        doc.querySelectorAll(selector).forEach(el => el.remove())
-      );
+        // Create a temporary DOM to parse HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
 
-      // Extract text from meaningful elements
-      const textElements = doc.querySelectorAll(
-        'p, h1, h2, h3, h4, h5, h6, li, article, section, div'
-      );
-      
-      const texts = Array.from(textElements)
-        .map(el => el.textContent.trim())
-        .filter(text => text.length > 0);
+        // Extract text from various elements
+        const textElements = tempDiv.querySelectorAll(
+          'p, h1, h2, h3, h4, h5, h6, div, article, section, main'
+        );
 
-      // Clean and preprocess text
-      const cleanedText = texts.join(' ')
-        .replace(/\s+/g, ' ')  // Normalize whitespace
-        .replace(/[^\w\s.,!?]/g, '')  // Remove special characters
-        .trim()
-        .substring(0, this.options.maxLength);
-
-      return cleanedText;
-    }
-
-    splitTextIntoChunks(text) {
-      const words = text.split(/\s+/);
-      const chunks = [];
-      
-      for (let i = 0; i < words.length; i += this.options.chunkSize) {
-        const chunk = words
-          .slice(i, i + this.options.chunkSize + this.options.overlapSize)
+        let fullText = Array.from(textElements)
+          .map(el => el.textContent)
           .join(' ');
-        chunks.push(chunk);
-      }
 
+        // Clean and preprocess text
+        fullText = cleanText(fullText);
+
+        // Split text into chunks (simple implementation)
+        this.chunks = this.splitIntoChunks(fullText, 500);
+
+        return this.chunks;
+      } catch (error) {
+        console.error('Web content loading error:', error);
+        return [];
+      }
+    }
+
+    // Simple text chunking method
+    splitIntoChunks(text, chunkSize) {
+      const chunks = [];
+      for (let i = 0; i < text.length; i += chunkSize) {
+        chunks.push(text.slice(i, i + chunkSize));
+      }
       return chunks;
     }
 
-    async generateEmbeddings(chunks) {
-      // Placeholder for actual embedding generation
-      // In a real implementation, you'd use an embedding service
-      return chunks.map((chunk, index) => ({
-        chunkId: index,
-        embedding: this.simpleEmbedding(chunk)
-      }));
-    }
-
-    simpleEmbedding(text) {
-      // Very basic deterministic embedding simulation
-      const hash = text.split('').reduce(
-        (acc, char) => ((acc << 5) - acc) + char.charCodeAt(0), 0
+    async searchRelevantChunks(query) {
+      // Simple relevance search (can be enhanced with more advanced techniques)
+      return this.chunks.filter(chunk => 
+        chunk.toLowerCase().includes(query.toLowerCase())
       );
-      return [hash];
     }
   }
  
@@ -442,25 +410,39 @@ let abortController;
     return markdown;
   }
 
-  // New function to scrape website content
-  // Modify existing scrapeWebsiteContent function
+  // Modify the existing scrapeWebsiteContent function
   async function scrapeWebsiteContent(url) {
     try {
-      const loader = new WebBaseLoader(url);
-      const { fullText, chunks, embeddings } = await loader.loadContent();
+      const loader = new WebContentLoader(url);
+      await loader.load();
 
-      console.log(`Website Content Extraction:
+      // If a query is available, use more targeted search
+      const currentQuery = conversationHistory.length > 0 
+        ? conversationHistory[conversationHistory.length - 1].content 
+        : '';
+
+      let scrapedContent = '';
+      if (currentQuery) {
+        const relevantChunks = await loader.searchRelevantChunks(currentQuery);
+        scrapedContent = relevantChunks.join(' ');
+      } else {
+        // Fallback to full content if no specific query
+        scrapedContent = loader.chunks.join(' ');
+      }
+
+      // Enhanced logging
+      console.log(`Advanced Web Content Extraction Debug:
         - URL: ${url}
-        - Total Content Length: ${fullText.length} characters
-        - Number of Chunks: ${chunks.length}`);
+        - Content Length: ${scrapedContent.length} characters
+        - First 300 chars: ${scrapedContent.substring(0, 300)}...`);
 
-      return { fullText, chunks, embeddings };
+      return scrapedContent || '';
     } catch (error) {
-      console.error('Web content loading error:', error);
-      return { fullText: '', chunks: [], embeddings: [] };
+      console.error('Advanced website content loading error:', error);
+      return '';
     }
   }
-
+  
   
   // Modified streamFromAzureOpenAI function remains the same as in your original code
   async function streamFromAzureOpenAI(
@@ -471,15 +453,15 @@ let abortController;
     abortController = new AbortController();
     const { signal } = abortController;
   
+    // Attempt to get the current website URL
     const currentWebsiteUrl = window.location.href;
   
-    const { fullText, chunks, embeddings } = await scrapeWebsiteContent(currentWebsiteUrl);
+    // Scrape website content if applicable
+    const websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
   
-    // Enhanced context-aware prompt
-    const contextAwarePrompt = fullText 
-      ? `Context from ${currentWebsiteUrl}: ${fullText}\n\n` +
-        `Chunk Contexts: ${chunks.slice(0, 3).join(' | ')}\n\n` +
-        `User Query: ${userMessage}`
+    // Prepare context-aware prompt
+    const contextAwarePrompt = websiteContent 
+      ? `Context from ${currentWebsiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
       : userMessage;
   
     conversationHistory.push({ role: "user", content: contextAwarePrompt });
