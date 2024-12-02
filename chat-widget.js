@@ -1,66 +1,42 @@
 (function (w, d) {
-  // Utility function for text cleaning and preprocessing
-  function cleanText(text) {
-    return text
-      .replace(/\s+/g, ' ')  // Normalize whitespace
-      .replace(/[^\w\s.,!?]/g, '')  // Remove special characters
-      .trim()
-      .substring(0, 10000);  // Limit text length
+  const msalConfig = {
+    auth: {
+      clientId: "5c366cc7-6259-4ffa-96ab-8b13ac790d67", // Replace with your client ID
+      authority:
+        "https://login.microsoftonline.com/b092f630-a3ad-4610-b96e-4a6c75c2a6cc", // Replace with your tenant ID
+    },
+  };
+  const msalInstance = new msal.PublicClientApplication(msalConfig);
+ 
+  async function checkLoginStatus() {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+      console.log("User  is already logged in:", accounts);
+      // You can use the first account to get an access token if needed
+      return accounts[0]; // Return the first account
+    } else {
+      console.log("User  is not logged in.");
+      return null; // No accounts found
+    }
   }
-
-  // Advanced Web Content Loader
-  class WebContentLoader {
-    constructor(url) {
-      this.url = url;
-      this.chunks = [];
-    }
-
-    async load() {
+ 
+  async function login() {
+    const existingAccount = await checkLoginStatus();
+    console.log(existingAccount);
+ 
+    if (existingAccount) {
+      console.log("Using existing account:", existingAccount);
+      // Optionally, you can acquire a token silently here if needed
+      // e.g., await msalInstance.acquireTokenSilent({ account: existingAccount });
+    } else {
       try {
-        // Fetch HTML content
-        const response = await fetch(this.url);
-        const html = await response.text();
-
-        // Create a temporary DOM to parse HTML
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-
-        // Extract text from various elements
-        const textElements = tempDiv.querySelectorAll(
-          'p, h1, h2, h3, h4, h5, h6, div, article, section, main'
-        );
-
-        let fullText = Array.from(textElements)
-          .map(el => el.textContent)
-          .join(' ');
-
-        // Clean and preprocess text
-        fullText = cleanText(fullText);
-
-        // Split text into chunks (simple implementation)
-        this.chunks = this.splitIntoChunks(fullText, 500);
-
-        return this.chunks;
+        const loginResponse = await msalInstance.loginPopup();
+        console.log("Login successful", loginResponse);
+        const accessToken = loginResponse.accessToken;
+        // Store the access token or use it as needed
       } catch (error) {
-        console.error('Web content loading error:', error);
-        return [];
+        console.error("Login failed", error);
       }
-    }
-
-    // Simple text chunking method
-    splitIntoChunks(text, chunkSize) {
-      const chunks = [];
-      for (let i = 0; i < text.length; i += chunkSize) {
-        chunks.push(text.slice(i, i + chunkSize));
-      }
-      return chunks;
-    }
-
-    async searchRelevantChunks(query) {
-      // Simple relevance search (can be enhanced with more advanced techniques)
-      return this.chunks.filter(chunk => 
-        chunk.toLowerCase().includes(query.toLowerCase())
-      );
     }
   }
  
@@ -410,39 +386,80 @@ let abortController;
     return markdown;
   }
 
-  // Modify the existing scrapeWebsiteContent function
+  // New function to scrape website content
   async function scrapeWebsiteContent(url) {
     try {
-      const loader = new WebContentLoader(url);
-      await loader.load();
-
-      // If a query is available, use more targeted search
-      const currentQuery = conversationHistory.length > 0 
-        ? conversationHistory[conversationHistory.length - 1].content 
-        : '';
-
+      // Enhanced content search strategies
+      const contentSearchStrategies = [
+        // Direct text search across the entire document
+        () => {
+          const pageText = document.body.innerText || document.body.textContent;
+          return pageText;
+        },
+        
+        // Search for specific elements with potential content
+        () => {
+          const contentElements = [
+            ...document.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, span')
+          ];
+          return contentElements
+            .map(el => el.innerText || el.textContent)
+            .join(' ');
+        },
+        
+        // More aggressive text extraction
+        () => {
+          const walker = document.createTreeWalker(
+            document.body, 
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+          );
+  
+          let text = '';
+          while(walker.nextNode()) {
+            text += walker.currentNode.textContent + ' ';
+          }
+          return text;
+        }
+      ];
+  
+      // Try each content search strategy
       let scrapedContent = '';
-      if (currentQuery) {
-        const relevantChunks = await loader.searchRelevantChunks(currentQuery);
-        scrapedContent = relevantChunks.join(' ');
-      } else {
-        // Fallback to full content if no specific query
-        scrapedContent = loader.chunks.join(' ');
+      for (const strategy of contentSearchStrategies) {
+        try {
+          scrapedContent = strategy();
+          if (scrapedContent && scrapedContent.trim().length > 0) break;
+        } catch (error) {
+          console.warn('Content extraction strategy failed:', error);
+        }
       }
-
+  
+      // Clean and prepare content
+      scrapedContent = scrapedContent
+        .replace(/\s+/g, ' ')  // Normalize whitespace
+        .replace(/[^\w\s.,!?]/g, '')  // Remove special characters
+        .trim()
+        .substring(0, 5000);  // Increased max length for more context
+  
       // Enhanced logging
-      console.log(`Advanced Web Content Extraction Debug:
+      console.log(`Website Content Extraction Debug:
         - URL: ${url}
         - Content Length: ${scrapedContent.length} characters
         - First 300 chars: ${scrapedContent.substring(0, 300)}...`);
-
+  
+      // Specific phrase checking
+      const phraseToCheck = 'Welcome to Intellient Chat Widget';
+      const phraseExists = scrapedContent.includes(phraseToCheck);
+      
+      console.log(`Phrase "${phraseToCheck}" exists: ${phraseExists}`);
+  
       return scrapedContent || '';
     } catch (error) {
-      console.error('Advanced website content loading error:', error);
+      console.error('Advanced website content scraping error:', error);
       return '';
     }
   }
-  
   
   // Modified streamFromAzureOpenAI function remains the same as in your original code
   async function streamFromAzureOpenAI(
