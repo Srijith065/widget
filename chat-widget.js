@@ -290,6 +290,13 @@ input {
     border: 1px solid #ccc;
     margin-bottom: 5px;
 }
+
+.ask-intellient-title {
+      display: block;
+      font-size: 20px;
+      margin: 0;
+      font-weight: bold;
+    }
  
 .tag {
     background-color: #0084ff;
@@ -382,39 +389,79 @@ let abortController;
   // New function to scrape website content
   async function scrapeWebsiteContent(url) {
     try {
-      // Basic implementation of website content scraping
-      const response = await fetch(
-        `https://intellientuat.azurewebsites.net/api/scrape-website?url=${encodeURIComponent(url)}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      // Enhanced content search strategies
+      const contentSearchStrategies = [
+        // Direct text search across the entire document
+        () => {
+          const pageText = document.body.innerText || document.body.textContent;
+          return pageText;
+        },
+        
+        // Search for specific elements with potential content
+        () => {
+          const contentElements = [
+            ...document.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, span')
+          ];
+          return contentElements
+            .map(el => el.innerText || el.textContent)
+            .join(' ');
+        },
+        
+        // More aggressive text extraction
+        () => {
+          const walker = document.createTreeWalker(
+            document.body, 
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+          );
   
-      if (!response.ok) {
-        console.warn('Website scraping failed');
-        return '';
+          let text = '';
+          while(walker.nextNode()) {
+            text += walker.currentNode.textContent + ' ';
+          }
+          return text;
+        }
+      ];
+  
+      // Try each content search strategy
+      let scrapedContent = '';
+      for (const strategy of contentSearchStrategies) {
+        try {
+          scrapedContent = strategy();
+          if (scrapedContent && scrapedContent.trim().length > 0) break;
+        } catch (error) {
+          console.warn('Content extraction strategy failed:', error);
+        }
       }
   
-      const data = await response.json();
+      // Clean and prepare content
+      scrapedContent = scrapedContent
+        .replace(/\s+/g, ' ')  // Normalize whitespace
+        .replace(/[^\w\s.,!?]/g, '')  // Remove special characters
+        .trim()
+        .substring(0, 5000);  // Increased max length for more context
+  
+      // Enhanced logging
+      console.log(`Website Content Extraction Debug:
+        - URL: ${url}
+        - Content Length: ${scrapedContent.length} characters
+        - First 300 chars: ${scrapedContent.substring(0, 300)}...`);
+  
+      // Specific phrase checking
+      const phraseToCheck = 'Welcome to Intellient Chat Widget';
+      const phraseExists = scrapedContent.includes(phraseToCheck);
       
-      // Extract and process relevant content
-      const scrapedContent = data.content || '';
-      
-      // Limit the content length to prevent overwhelming the context
-      const maxContentLength = 3000;
-      return scrapedContent.length > maxContentLength 
-        ? scrapedContent.substring(0, maxContentLength) 
-        : scrapedContent;
+      console.log(`Phrase "${phraseToCheck}" exists: ${phraseExists}`);
+  
+      return scrapedContent || '';
     } catch (error) {
-      console.error('Error scraping website:', error);
+      console.error('Advanced website content scraping error:', error);
       return '';
     }
   }
   
-  // Modified streamFromAzureOpenAI function
+  // Modified streamFromAzureOpenAI function remains the same as in your original code
   async function streamFromAzureOpenAI(
     userMessage,
     messageElement,
@@ -530,6 +577,7 @@ let abortController;
     msalInstance.logout();
   }
   async function createChatWidget() {
+    let response =await persona();
     const validatedLogo = await validateLogo(branding.logo);
  
     // Create launcher
@@ -543,7 +591,7 @@ let abortController;
     chatContainer.innerHTML = `
       <div class="fini-chat-header">
         <img src="${validatedLogo}" alt="Assistant" class="fini-chat-avatar">
-        <h3 style="margin: 0;">Ask Intellient</h3>
+        <label class="ask-intellient-title">Ask Intellient</label>
         <div class="fini-chat-close">
           <svg viewBox="0 0 24 24">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
@@ -638,7 +686,7 @@ let abortController;
           await streamFromAzureOpenAI(
             message,
             assistantMessage,
-            intellibotName
+            "Context-Scraper"
           );
         // } else {
         //   try {
@@ -670,7 +718,7 @@ let abortController;
       // Check if the input contains a name or meets specific conditions
       if (message) {
         if (message.includes("@")) {
-          let response = await persona();
+          // let response = await persona();
  
           const data = response.response;
           console.log("intellibot resposnes", data); // Replace with the actual function you want to call
