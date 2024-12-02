@@ -4,101 +4,84 @@
   const msalConfig = {
     auth: {
       clientId: "5c366cc7-6259-4ffa-96ab-8b13ac790d67", 
-      authority:
-        "https://login.microsoftonline.com/b092f630-a3ad-4610-b96e-4a6c75c2a6cc", 
+      authority: "https://login.microsoftonline.com/b092f630-a3ad-4610-b96e-4a6c75c2a6cc",
     },
   };
   const msalInstance = new msal.PublicClientApplication(msalConfig);
- 
-  async function checkLoginStatus() {
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length > 0) {
-      console.log("User is already logged in:", accounts);
-      return accounts[0];
-    } else {
-      console.log("User is not logged in.");
-      return null;
-    }
-  }
- 
-  async function login() {
-    const existingAccount = await checkLoginStatus();
-    console.log(existingAccount);
- 
-    if (existingAccount) {
-      console.log("Using existing account:", existingAccount);
-    } else {
+
+  // Enhanced Web Content Loader with Comprehensive Extraction
+  async function extractWebsiteContent(url) {
       try {
-        const loginResponse = await msalInstance.loginPopup();
-        console.log("Login successful", loginResponse);
-        const accessToken = loginResponse.accessToken;
+          // Proxy the request through a CORS-enabled server to avoid cross-origin issues
+          const proxyUrl = `https://cors-anywhere.herokuapp.com/${url}`;
+          
+          const response = await fetch(proxyUrl, {
+              method: 'GET',
+              headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+              }
+          });
+
+          if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const htmlText = await response.text();
+          
+          // Create a temporary DOM parser
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(htmlText, 'text/html');
+
+          // Advanced content extraction strategies
+          const extractionStrategies = [
+              () => {
+                  // Strategy 1: Extract from main content areas
+                  const mainSelectors = [
+                      'main', 
+                      'article', 
+                      '#main-content', 
+                      '.main-content', 
+                      'body > div.content',
+                      '[role="main"]'
+                  ];
+
+                  for (const selector of mainSelectors) {
+                      const element = doc.querySelector(selector);
+                      if (element) {
+                          // Remove script, style, and navigation elements
+                          const elementsToRemove = element.querySelectorAll('script, style, nav, header, footer, .navigation, .menu');
+                          elementsToRemove.forEach(el => el.remove());
+                          
+                          return element.textContent.trim();
+                      }
+                  }
+                  return '';
+              },
+              () => {
+                  // Strategy 2: Fallback to body text with cleaned content
+                  const bodyText = doc.body.textContent || '';
+                  return bodyText
+                      .replace(/\s+/g, ' ')  // Replace multiple spaces
+                      .replace(/[^\w\s.,!?]/g, '')  // Remove special characters
+                      .trim()
+                      .substring(0, 5000);  // Limit to 5000 characters
+              }
+          ];
+
+          // Try extraction strategies
+          for (const strategy of extractionStrategies) {
+              const extractedText = strategy();
+              if (extractedText && extractedText.length > 100) {
+                  return extractedText;
+              }
+          }
+
+          return 'Unable to extract meaningful content from the website.';
       } catch (error) {
-        console.error("Login failed", error);
+          console.error('Advanced web content extraction error:', error);
+          return `Error extracting website content: ${error.message}`;
       }
-    }
   }
- 
-  const widgetOptions = w.intellientoptions || { mode: "widget" };
-  const mode = widgetOptions.mode || "widget";
-  const widgetId = widgetOptions.widgetId;
-  const websiteUrl = widgetOptions.websiteUrl || window.location.href;
-
-  // Enhanced website content loader with advanced extraction strategies
-  async function advancedWebContentLoader(url) {
-    try {
-        // Fetch the HTML content
-        const response = await fetch(url);
-        const htmlText = await response.text();
-
-        // Create a temporary DOM element to parse HTML
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = htmlText;
-
-        // Extraction strategies
-        const extractionStrategies = [
-            () => {
-                // Strategy 1: Extract from semantic content tags
-                const semanticSelectors = [
-                    'article', 'main', 'section', 
-                    '[role="main"]', '.content', 
-                    '#content', 'body'
-                ];
-                
-                for (const selector of semanticSelectors) {
-                    const element = tempDiv.querySelector(selector);
-                    if (element) return element.innerText;
-                }
-                return '';
-            },
-            () => {
-                // Strategy 2: Remove non-content elements
-                const elementsToRemove = tempDiv.querySelectorAll(
-                    'script, style, nav, header, footer, .navigation, .menu'
-                );
-                elementsToRemove.forEach(el => el.remove());
-                return tempDiv.innerText;
-            }
-        ];
-
-        // Apply extraction strategies
-        for (const strategy of extractionStrategies) {
-            const extractedText = strategy();
-            if (extractedText && extractedText.trim().length > 100) {
-                // Text cleaning and preprocessing
-                return extractedText
-                    .replace(/\s+/g, ' ') // Remove extra whitespaces
-                    .replace(/[^\w\s.,!?]/g, '') // Remove special characters
-                    .trim()
-                    .substring(0, 5000); // Limit to 5000 characters
-            }
-        }
-
-        return 'Unable to extract meaningful content from the website.';
-    } catch (error) {
-        console.error('Advanced web content loading error:', error);
-        return '';
-    }
-}
    
     // if (widgetId !== window.location.href) {
     //   console.error("Widget ID is required but not provided.");
@@ -464,7 +447,7 @@
       }
     }
     
-    // Modified streamFromAzureOpenAI function remains the same as in your original code
+    // Modify streamFromAzureOpenAI to use the new extraction method
     async function streamFromAzureOpenAI(
       userMessage,
       messageElement,
@@ -473,12 +456,12 @@
       abortController = new AbortController();
       const { signal } = abortController;
     
-      // Use advanced web content loader
-      const websiteContent = await advancedWebContentLoader(websiteUrl);
+      // Extract website content based on the URL in widget options
+      const websiteContent = await extractWebsiteContent(websiteUrl);
     
       // Prepare context-aware prompt
       const contextAwarePrompt = websiteContent 
-        ? `Context from ${websiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
+        ? `Website Context from ${websiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
         : userMessage;
     
       conversationHistory.push({ role: "user", content: contextAwarePrompt });
@@ -814,8 +797,12 @@
       return messageDiv;
     }
    
-    // Initialize based on mode
-    if (mode === "widget") {
-      createChatWidget();
-    }
-  })(window, document);
+// Initialization logic
+const widgetOptions = w.intellientoptions || { mode: "widget" };
+const mode = widgetOptions.mode || "widget";
+const websiteUrl = widgetOptions.websiteUrl || window.location.href;
+
+if (mode === "widget") {
+  createChatWidget();
+}
+})(window, document);
