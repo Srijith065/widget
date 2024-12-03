@@ -7,6 +7,7 @@
       this.maxTokens = maxTokens;
     }
 
+    // Basic text preprocessing and chunking
     preprocessAndChunk(text) {
       // Clean and preprocess text
       const cleanedText = text
@@ -25,14 +26,18 @@
       return chunks;
     }
 
+    // Placeholder for actual embedding generation
     async generateEmbeddings(chunks) {
+      // In a real implementation, this would call an embedding API
       return chunks.map((chunk, index) => ({
         chunkId: index,
         vector: this.simpleEmbeddingVector(chunk)
       }));
     }
 
+    // Simple embedding vector generation (mock implementation)
     simpleEmbeddingVector(text) {
+      // Basic vector generation based on text characteristics
       return text.split('').map(char => char.charCodeAt(0))
         .slice(0, 128)  // Limit vector size
         .map(code => code / 255);  // Normalize
@@ -50,24 +55,28 @@
       this.domainUrls = new Set();
       this.originUrl = new URL(url);
       this.crawlStartTime = Date.now();
-      this.MAX_CRAWL_TIME = 30000;
-      this.MAX_PAGES = 150;
-      this.MAX_DEPTH = 5;
+      this.MAX_CRAWL_TIME = 30000; // 30 seconds max crawl time
+      this.MAX_PAGES = 150; // Increased page limit
+      this.MAX_DEPTH = 5; // Reasonable depth limit
     }
-
+  
+    // Improved URL validation and filtering
     isValidUrl(href, currentUrl) {
       try {
         const url = new URL(href, currentUrl);
-        const isSameOrigin =
+        
+        // Strict origin matching with additional conditions
+        const isSameOrigin = 
           url.hostname === this.originUrl.hostname &&
           url.protocol === this.originUrl.protocol;
-        
+  
+        // More comprehensive invalid extension list
         const invalidExtensions = [
           '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.svg', 
           '.doc', '.docx', '.xlsx', '.pptx', '.zip', '.rar', 
           '.mp3', '.mp4', '.avi', '.mov', '.webm'
         ];
-
+  
         return (
           isSameOrigin &&
           !this.visitedUrls.has(url.href) &&
@@ -75,88 +84,128 @@
           !url.href.includes('javascript:') &&
           !invalidExtensions.some(ext => url.href.toLowerCase().endsWith(ext)) &&
           url.protocol.startsWith('http') &&
+          // Exclude login, admin, and other non-content pages
           !url.pathname.match(/\/(login|admin|wp-admin|dashboard)/)
         );
       } catch {
         return false;
       }
     }
-
+  
     async discoverPageLinks(currentDocument, baseUrl) {
       const linkSources = [
         () => Array.from(currentDocument.links).map(link => link.href),
         () => Array.from(currentDocument.querySelectorAll('a[href]'))
           .map(a => a.getAttribute('href'))
       ];
-
+  
       let links = [];
       for (const source of linkSources) {
         links = source()
           .filter(href => href && this.isValidUrl(href, baseUrl))
           .map(href => new URL(href, baseUrl).href);
-
+  
         if (links.length > 0) break;
       }
-
+  
+      console.log(`🔍 WebCrawler Link Discovery:
+        - Total Unique Links Found: ${links.length}`);
+  
       return [...new Set(links)];
     }
-
-    async crawlWebsite(depth = 0, currentDocument = d) {
+  
+    async crawlWebsite(depth = 0, currentDocument = document) {
+      // Check crawl constraints
       const elapsedTime = Date.now() - this.crawlStartTime;
-      if (depth >= this.MAX_DEPTH || this.visitedUrls.size >= this.MAX_PAGES || elapsedTime >= this.MAX_CRAWL_TIME) {
+      if (
+        depth >= this.MAX_DEPTH || 
+        this.visitedUrls.size >= this.MAX_PAGES || 
+        elapsedTime >= this.MAX_CRAWL_TIME
+      ) {
+        console.log(`🛑 WebCrawler Stopped:
+          - Max Depth: ${depth >= this.MAX_DEPTH}
+          - Max Pages: ${this.visitedUrls.size >= this.MAX_PAGES}
+          - Time Limit: ${elapsedTime >= this.MAX_CRAWL_TIME}`);
+        
         return Array.from(this.domainUrls);
       }
-
-      if (this.visitedUrls.has(this.url)) {
-        return Array.from(this.domainUrls);
-      }
-
-      const currentPageContent = await this.extractText(currentDocument);
-      if (currentPageContent && currentPageContent.length > 200) {
-        this.domainUrls.add({ url: this.url, content: currentPageContent, depth: depth });
-        this.visitedUrls.add(this.url);
-      }
-
-      const pageLinks = await this.discoverPageLinks(currentDocument, this.url);
-
-      for (const link of pageLinks) {
-        if (this.visitedUrls.size >= this.MAX_PAGES || Date.now() - this.crawlStartTime >= this.MAX_CRAWL_TIME) break;
-
-        if (!this.visitedUrls.has(link)) {
-          try {
-            const originalUrl = this.url;
-            this.url = link;
-
-            const iframe = d.createElement('iframe');
-            iframe.src = link;
-            iframe.style.display = 'none';
-            d.body.appendChild(iframe);
-
-            await new Promise(resolve => {
-              iframe.onload = async () => {
-                const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
-                try {
-                  await this.crawlWebsite(depth + 1, iframeDocument);
-                } catch (error) {
-                  console.error(`❌ WebCrawler Iframe Error for ${link}:`, error);
-                } finally {
-                  d.body.removeChild(iframe);
-                  resolve();
-                }
-              };
-            });
-
-            this.url = originalUrl;
-          } catch (error) {
-            console.error(`❌ WebCrawler Error crawling ${link}:`, error);
+  
+      try {
+        // Skip if already visited
+        if (this.visitedUrls.has(this.url)) {
+          return Array.from(this.domainUrls);
+        }
+  
+        // Extract current page content with multiple strategies
+        const currentPageContent = await this.extractText(currentDocument);
+        
+        if (currentPageContent && currentPageContent.length > 200) {
+          this.domainUrls.add({
+            url: this.url,
+            content: currentPageContent,
+            depth: depth
+          });
+          this.visitedUrls.add(this.url);
+          
+          console.log(`✅ WebCrawler: Added page ${this.url}
+            - Content Length: ${currentPageContent.length} characters
+            - Crawl Depth: ${depth}`);
+        }
+  
+        // Discover and process links
+        const pageLinks = await this.discoverPageLinks(currentDocument, this.url);
+  
+        // Recursive crawling with depth and limit tracking
+        for (const link of pageLinks) {
+          if (
+            this.visitedUrls.size >= this.MAX_PAGES || 
+            Date.now() - this.crawlStartTime >= this.MAX_CRAWL_TIME
+          ) break;
+  
+          if (!this.visitedUrls.has(link)) {
+            try {
+              // Temporary context switch
+              const originalUrl = this.url;
+              this.url = link;
+  
+              // Create iframe for content loading
+              const iframe = document.createElement('iframe');
+              iframe.src = link;
+              iframe.style.display = 'none';
+              document.body.appendChild(iframe);
+  
+              await new Promise(resolve => {
+                iframe.onload = async () => {
+                  const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
+  
+                  try {
+                    // Recursive crawl with increased depth
+                    await this.crawlWebsite(depth + 1, iframeDocument);
+                  } catch (error) {
+                    console.error(`❌ WebCrawler Iframe Error for ${link}:`, error);
+                  } finally {
+                    document.body.removeChild(iframe);
+                    resolve();
+                  }
+                };
+              });
+  
+              // Restore original URL
+              this.url = originalUrl;
+            } catch (error) {
+              console.error(`❌ WebCrawler Error crawling ${link}:`, error);
+            }
           }
         }
+  
+        return Array.from(this.domainUrls);
+      } catch (error) {
+        console.error('❌ WebCrawler Catastrophic Error:', error);
+        return Array.from(this.domainUrls);
       }
-
-      return Array.from(this.domainUrls);
     }
-
-    async extractText(currentDocument = d) {
+      
+    async extractText(currentDocument = document) {
       const extractionMethods = [
         () => this.extractMainContentBySemantics(currentDocument),
         () => this.extractTextByElementTypes(currentDocument),
@@ -167,85 +216,122 @@
       let extractedContent = '';
       for (const extractor of extractionMethods) {
         extractedContent = await extractor();
+        
         if (extractedContent && extractedContent.trim().length > 100) {
+          console.log(`📄 Content Extraction Success:
+            - Method: ${extractor.name}
+            - Content Length: ${extractedContent.length} characters`);
           break;
         }
       }
+
       return this.preprocessText(extractedContent);
     }
-
-    async extractEntireBodyText(currentDocument) {
-      const relevantSelectors = [
-        'body', 'main', 'article', '#content', 
-        '.content', '.main-content', '#main-content'
-      ];
-
-      for (const selector of relevantSelectors) {
-        const contentElement = currentDocument.querySelector(selector);
-        if (contentElement) {
-          const clonedContent = contentElement.cloneNode(true);
-          const elementsToRemove = clonedContent.querySelectorAll('script, style, nav, header, footer');
-          elementsToRemove.forEach(el => el.remove());
-          return clonedContent.innerText || clonedContent.textContent || '';
-        }
-      }
-
-      return currentDocument.body.innerText || currentDocument.body.textContent || '';
-    }
-
-    async extractMainContentBySemantics(currentDocument) {
-      const contentSelectors = ['main', 'article', '.content', '#content', '.main-content', '.page-content', '#page-content', '.entry-content', '#entry-content'];
-
-      for (const selector of contentSelectors) {
-        const contentElement = currentDocument.querySelector(selector);
-        if (contentElement) {
-          return contentElement.innerText || contentElement.textContent;
-        }
-      }
-      return '';
-    }
-
-    async extractTextByElementTypes(currentDocument) {
-      const importantElements = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'article', 'section', 'div'];
-
-      const textParts = [];
-      importantElements.forEach(tag => {
-        const elements = currentDocument.getElementsByTagName(tag);
-        Array.from(elements).forEach(el => {
-          const text = el.innerText || el.textContent;
-          if (text.trim().length > 30 && !text.toLowerCase().includes('navigation') && !text.toLowerCase().includes('menu')) {
-            textParts.push(text);
+    
+      // New method: extract entire body text as a last resort
+      async extractEntireBodyText(currentDocument) {
+        // More selective text extraction
+        const relevantSelectors = [
+          'body', 'main', 'article', '#content', 
+          '.content', '.main-content', '#main-content'
+        ];
+  
+        for (const selector of relevantSelectors) {
+          const contentElement = currentDocument.querySelector(selector);
+          if (contentElement) {
+            // Remove script, style, and other non-content elements
+            const clonedContent = contentElement.cloneNode(true);
+            const elementsToRemove = clonedContent.querySelectorAll('script, style, nav, header, footer');
+            elementsToRemove.forEach(el => el.remove());
+  
+            return clonedContent.innerText || clonedContent.textContent || '';
           }
-        });
-      });
-
-      return textParts.join(' ');
-    }
-
-    async extractTextByTreeWalker(currentDocument) {
-      const walker = currentDocument.createTreeWalker(currentDocument.body, NodeFilter.SHOW_TEXT, null, false);
-
-      let text = '';
-      while(walker.nextNode()) {
-        const nodeText = walker.currentNode.textContent.trim();
-        if (nodeText.length > 30 && !nodeText.toLowerCase().includes('menu') && !nodeText.toLowerCase().includes('navigation')) {
-          text += nodeText + ' ';
         }
+  
+        return currentDocument.body.innerText || currentDocument.body.textContent || '';
       }
 
-      return text;
+      async extractMainContentBySemantics(currentDocument) {
+        const contentSelectors = [
+          'main', 'article', '.content', '#content', 
+          '.main-content', '.page-content', '#page-content',
+          '.entry-content', '#entry-content'
+        ];
+  
+        for (const selector of contentSelectors) {
+          const contentElement = currentDocument.querySelector(selector);
+          if (contentElement) {
+            // Remove unnecessary nested elements
+            const clonedContent = contentElement.cloneNode(true);
+            const unnecessaryElements = clonedContent.querySelectorAll('nav, header, footer, aside, .sidebar, .comment');
+            unnecessaryElements.forEach(el => el.remove());
+  
+            return clonedContent.innerText || clonedContent.textContent;
+          }
+        }
+  
+        return '';
+      }
+  
+      async extractTextByElementTypes(currentDocument) {
+        const importantElements = [
+          'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+          'article', 'section', 'div'
+        ];
+  
+        const textParts = [];
+        importantElements.forEach(tag => {
+          const elements = currentDocument.getElementsByTagName(tag);
+          Array.from(elements).forEach(el => {
+            const text = el.innerText || el.textContent;
+            // More strict filtering
+            if (text.trim().length > 30 && 
+                !text.toLowerCase().includes('navigation') && 
+                !text.toLowerCase().includes('menu')) {
+              textParts.push(text);
+            }
+          });
+        });
+  
+        return textParts.join(' ');
+      }
+  
+      async extractTextByTreeWalker(currentDocument) {
+        const walker = currentDocument.createTreeWalker(
+          currentDocument.body, 
+          NodeFilter.SHOW_TEXT,
+          null,
+          false
+        );
+  
+        let text = '';
+        while(walker.nextNode()) {
+          const nodeText = walker.currentNode.textContent.trim();
+          // More selective text gathering
+          if (nodeText.length > 30 && 
+              !nodeText.toLowerCase().includes('menu') && 
+              !nodeText.toLowerCase().includes('navigation')) {
+            text += nodeText + ' ';
+          }
+        }
+  
+        return text;
+      }
+  
+      preprocessText(text) {
+        return text
+          .replace(/\s+/g, ' ')
+          .replace(/[^\w\s.,!?]/g, '')
+          .trim()
+          .substring(0, this.maxTokens);
+      }
+  
+      async processContentEmbedding() {
+        const extractedText = await this.extractText();
+        const textChunks = this.embeddingUtility.preprocessAndChunk(extractedText);
+        return await this.embeddingUtility.generateEmbeddings(textChunks);
+      }
     }
-
-    preprocessText(text) {
-      return text.replace(/\s+/g, ' ').replace(/[^\w\s.,!?]/g, '').trim().substring(0, this.maxTokens);
-    }
-
-    async processContentEmbedding() {
-      const extractedText = await this.extractText();
-      const textChunks = this.embeddingUtility.preprocessAndChunk(extractedText);
-      return await this.embeddingUtility.generateEmbeddings(textChunks);
-    }
-  }
 
   // Existing code from the original script continues here...
   const msalConfig = {
@@ -619,67 +705,59 @@ let abortController;
   }
   // Updated code - Intellient UAT
   function markdownToHtml(markdown) {
+    // Convert **bold** to <strong>
     markdown = markdown.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+ 
+    // Convert *italic* to <em>
     markdown = markdown.replace(/\*(.*?)\*/g, "<em>$1</em>");
-    markdown = markdown.replace(/^\s*-\s+(.*)$/gm, "<ul><li>$1</li></ul>");
+ 
+    // Convert - list items to <ul><li>
+    markdown = markdown.replace(/^\s*-\s+(.*)$/g, "<ul><li>$1</li></ul>");
+ 
+    // Handle line breaks
     markdown = markdown.replace(/\n/g, "<br>");
+ 
     return markdown;
-  }
-
-  // Add WebsiteContentCache class for managing crawled content
-  class WebsiteContentCache {
-    constructor() {
-      this.cachedContent = {};
-    }
-
-    async getCachedContent(url) {
-      if (this.cachedContent[url]) {
-        return this.cachedContent[url];
-      }
-      return null;
-    }
-
-    async cacheWebsiteContent(url, content) {
-      this.cachedContent[url] = { content: content, timestamp: Date.now() };
-      try {
-        localStorage.setItem(`intellient_cache_${url}`, JSON.stringify({ content: content, timestamp: Date.now() }));
-      } catch (error) {
-        console.warn('Could not save to localStorage:', error);
-      }
-    }
-
-    isCacheValid(url, maxAgeHours = 24) {
-      const cachedItem = this.cachedContent[url] || JSON.parse(localStorage.getItem(`intellient_cache_${url}`));
-      if (!cachedItem) return false;
-
-      const maxAgeMilliseconds = maxAgeHours * 60 * 60 * 1000;
-      return (Date.now() - cachedItem.timestamp) < maxAgeMilliseconds;
-    }
   }
 
   // Modified scrapeWebsiteContent function
   async function scrapeWebsiteContent(url) {
-    const websiteContentCache = new WebsiteContentCache();
     try {
-      if (websiteContentCache.isCacheValid(url)) {
-        const cachedContent = await websiteContentCache.getCachedContent(url);
-        if (cachedContent) return cachedContent.content;
-      }
-
       const contentLoader = new WebContentLoader(url);
+      
+      // Detect homepage or root conditions
       const isHomepage = 
         url === window.location.origin + '/' || 
         url === window.location.origin ||
         url.replace(/\/$/, '') === window.location.origin;
-    
+  
       if (isHomepage) {
+        console.log('🏠 Homepage detected - initiating comprehensive website crawl');
         const crawledContent = await contentLoader.crawlWebsite();
-        const combinedContent = crawledContent.sort((a, b) => a.depth - b.depth).map(page => `URL: ${page.url}\n\nContent:\n${page.content}`).join('\n\n---\n\n');
-        await websiteContentCache.cacheWebsiteContent(url, combinedContent);
+        
+        console.log(`🕸️ Web Crawling Results:
+          - Total Pages Crawled: ${crawledContent.length}
+          - Crawled Page URLs: ${crawledContent.map(page => page.url).join(', ')}`);
+  
+        // Combine contents from all crawled pages, prioritizing lower depth pages
+        const combinedContent = crawledContent
+          .sort((a, b) => a.depth - b.depth)  // Sort by depth
+          .map(page => `URL: ${page.url}\n\nContent:\n${page.content}`)
+          .join('\n\n---\n\n');
+  
+        console.log(`📊 Combined Content Stats:
+          - Total Combined Content Length: ${combinedContent.length} characters`);
+  
         return combinedContent;
       } else {
+        // For non-homepage, use existing extraction method
         const websiteContent = await contentLoader.extractText();
-        await websiteContentCache.cacheWebsiteContent(url, websiteContent);
+        
+        console.log(`📄 Single Page Content Extraction:
+          - URL: ${url}
+          - Content Length: ${websiteContent.length} characters
+          - First 300 chars: ${websiteContent.substring(0, 300)}...`);
+  
         return websiteContent;
       }
     } catch (error) {
@@ -689,27 +767,35 @@ let abortController;
   }
   
   // Modified streamFromAzureOpenAI function remains the same as in your original code
-  async function streamFromAzureOpenAI(userMessage, messageElement, intelliBot) {
+  async function streamFromAzureOpenAI(
+    userMessage,
+    messageElement,
+    intelliBot
+  ) {
     abortController = new AbortController();
     const { signal } = abortController;
+  
+    // Attempt to get the current website URL
     const currentWebsiteUrl = window.location.href;
+  
+    // Scrape website content if applicable
     const websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
-
-    if (!websiteContent) {
-      console.warn("No meaningful content extracted.");
-    }
-
-    const contextAwarePrompt = websiteContent
+  
+    // Prepare context-aware prompt
+    const contextAwarePrompt = websiteContent 
       ? `Context from ${currentWebsiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
       : userMessage;
-
+  
+    conversationHistory.push({ role: "user", content: contextAwarePrompt });
+  
     try {
-      conversationHistory.push({ role: "user", content: contextAwarePrompt });
       const response = await fetch(
         "https://intellientuat.azurewebsites.net/api/link-widget",
         {
           method: "POST",
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json'
+          },
           body: JSON.stringify({
             userMessage: contextAwarePrompt,
             filteredBot: intelliBot ? personaData.filter((name) => name.name === intelliBot) : null,
@@ -719,54 +805,74 @@ let abortController;
           signal,
         }
       );
-
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}, message: ${await response.text()}`);
-
+  
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+  
       const data = await response.json();
-      console.log("Response received:", data);
+      console.log("responses", data);
       const contentSpan = messageElement.querySelector(".fini-message-content");
-
+  
       if (data.choices && data.choices[0]?.message?.content) {
         let content = data.choices[0].message.content;
-        console.log("Content", content);
+        console.log("content", content);
+  
         content = markdownToHtml(content);
         let displayedContent = "";
         const contentArray = content.split("");
-
+  
         const messagesContainer = document.getElementById("finiChatMessages");
+  
+        // Flag to check if the user has scrolled up
         let userScrolledUp = false;
+  
         messagesContainer.addEventListener("scroll", () => {
-          const isAtBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight < 10;
+          const isAtBottom =
+            messagesContainer.scrollHeight -
+              messagesContainer.scrollTop -
+              messagesContainer.clientHeight 
+            10; // Adjust threshold as needed
           userScrolledUp = !isAtBottom;
         });
-
+  
         function updateContent(content) {
-          requestAnimationFrame(() => { contentSpan.innerHTML = content; });
+          requestAnimationFrame(() => {
+            contentSpan.innerHTML = content;
+          });
         }
-
+  
         for (const char of contentArray) {
           if (signal.aborted) {
-            console.log("Streaming stopped early");
-            return;
+            console.log("Streaming stopped");
+            return; // Exit the function early if the request is aborted
           }
+  
           displayedContent += char;
           updateContent(displayedContent);
+  
           if (!userScrolledUp) {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
           }
+  
           await new Promise((resolve) => setTimeout(resolve, 5));
         }
-
+  
         conversationHistory.push({ role: "assistant", content: content });
       } else {
-        throw new Error("No content in response or unexpected response format");
+        throw new Error("No content in response");
       }
     } catch (error) {
-      console.error("Error during response streaming:", error);
-      const errorMessage = messageElement.querySelector(".fini-message-content");
-      errorMessage.textContent = error.name === "AbortError"
-        ? "Response Stopped..."
-        : `Error: ${error.message}. Please try again.`;
+      if (error.name === "AbortError") {
+        messageElement.querySelector(".fini-message-content").textContent =
+          "Response Stopped...";
+        console.log("Stream was aborted by user.");
+      } else {
+        console.error("Error:", error);
+  
+        messageElement.querySelector(".fini-message-content").textContent =
+          "Sorry, there was an error processing your request. Please try again later.";
+      }
     }
   }
 
