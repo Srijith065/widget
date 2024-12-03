@@ -1,43 +1,6 @@
-// current code
+// Crawl sites - Devops:
 
 (function (w, d) {
-
-  document.addEventListener("DOMContentLoaded", function () {
-    if (typeof mixitup === 'function') {
-      // Initialize MixItUp
-      var mixer = mixitup('.container');
-  } else {
-      console.error("MixItUp library not loaded.");
-  }
-}); 
-
-function loadMixitUpLibrary() {
-  return new Promise((resolve, reject) => {
-    const script = d.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/mixitup@3.3.1/dist/mixitup.min.js'; // Alternative trusted CDN
-    script.onload = resolve;
-    script.onerror = reject;
-    d.head.appendChild(script);
-  });
-}
-
-async function initializeMixitUp() {
-  try {
-    await loadMixitUpLibrary();
-    if (typeof mixitup === 'function') {
-      const mixer = mixitup('.container');
-    } else {
-      console.error("MixItUp library failed to load.");
-    }
-  } catch (error) {
-    console.error("Error loading MixItUp library:", error);
-  }
-}
-
-document.addEventListener("DOMContentLoaded", initializeMixitUp);
-
-
-
   // Text Embedding Utility
   class TextEmbedding {
     constructor(maxTokens = 5000) {
@@ -84,7 +47,7 @@ document.addEventListener("DOMContentLoaded", initializeMixitUp);
 
   // Advanced Web Content Loader
   class WebContentLoader {
-    constructor(url, maxTokens = 50000) {
+    constructor(url, maxTokens = 5000) {
       this.url = url;
       this.maxTokens = maxTokens;
       this.embeddingUtility = new TextEmbedding(maxTokens);
@@ -92,28 +55,26 @@ document.addEventListener("DOMContentLoaded", initializeMixitUp);
       this.domainUrls = new Set();
       this.originUrl = new URL(url);
       this.crawlStartTime = Date.now();
-      this.MAX_CRAWL_TIME = 60000; // Increased to 60 seconds
-      this.MAX_PAGES = 250; // Increased page limit
-      this.MAX_DEPTH = 7; // Deeper crawling
-      this.CONTENT_CACHE = new Map(); // Global content cache
+      this.MAX_CRAWL_TIME = 30000; // 30 seconds max crawl time
+      this.MAX_PAGES = 150; // Increased page limit
+      this.MAX_DEPTH = 5; // Reasonable depth limit
     }
-
-    // Enhanced URL validation with more comprehensive checks
+  
+    // Improved URL validation and filtering
     isValidUrl(href, currentUrl) {
       try {
         const url = new URL(href, currentUrl);
         
-        // More strict origin matching
+        // Strict origin matching with additional conditions
         const isSameOrigin = 
           url.hostname === this.originUrl.hostname &&
           url.protocol === this.originUrl.protocol;
   
-        // Comprehensive invalid extension list
+        // More comprehensive invalid extension list
         const invalidExtensions = [
           '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.svg', 
           '.doc', '.docx', '.xlsx', '.pptx', '.zip', '.rar', 
-          '.mp3', '.mp4', '.avi', '.mov', '.webm', '.exe',
-          '.ppt', '.xls', '.csv', '.xml'
+          '.mp3', '.mp4', '.avi', '.mov', '.webm'
         ];
   
         return (
@@ -123,10 +84,8 @@ document.addEventListener("DOMContentLoaded", initializeMixitUp);
           !url.href.includes('javascript:') &&
           !invalidExtensions.some(ext => url.href.toLowerCase().endsWith(ext)) &&
           url.protocol.startsWith('http') &&
-          // Exclude administrative and non-content pages
-          !url.pathname.match(/\/(login|admin|wp-admin|dashboard|wp-content|assets)/) &&
-          // Exclude query parameters that might lead to duplicate content
-          !url.search.match(/page=|p=|cat=|tag=/)
+          // Exclude login, admin, and other non-content pages
+          !url.pathname.match(/\/(login|admin|wp-admin|dashboard)/)
         );
       } catch {
         return false;
@@ -155,7 +114,7 @@ document.addEventListener("DOMContentLoaded", initializeMixitUp);
       return [...new Set(links)];
     }
   
-    async crawlWebsite(depth = 0, currentDocument = document, parentUrl = null) {
+    async crawlWebsite(depth = 0, currentDocument = document) {
       // Check crawl constraints
       const elapsedTime = Date.now() - this.crawlStartTime;
       if (
@@ -170,69 +129,58 @@ document.addEventListener("DOMContentLoaded", initializeMixitUp);
         
         return Array.from(this.domainUrls);
       }
-
+  
       try {
         // Skip if already visited
         if (this.visitedUrls.has(this.url)) {
           return Array.from(this.domainUrls);
         }
-
-        // Check content cache first to avoid redundant processing
-        if (this.CONTENT_CACHE.has(this.url)) {
-          return this.CONTENT_CACHE.get(this.url);
-        }
-
-        // Extract current page content
+  
+        // Extract current page content with multiple strategies
         const currentPageContent = await this.extractText(currentDocument);
         
         if (currentPageContent && currentPageContent.length > 200) {
-          const pageInfo = {
+          this.domainUrls.add({
             url: this.url,
             content: currentPageContent,
-            depth: depth,
-            parentUrl: parentUrl
-          };
-
-          this.domainUrls.add(pageInfo);
+            depth: depth
+          });
           this.visitedUrls.add(this.url);
-          
-          // Cache the content
-          this.CONTENT_CACHE.set(this.url, pageInfo);
           
           console.log(`✅ WebCrawler: Added page ${this.url}
             - Content Length: ${currentPageContent.length} characters
             - Crawl Depth: ${depth}`);
         }
-
+  
         // Discover and process links
         const pageLinks = await this.discoverPageLinks(currentDocument, this.url);
-
+  
         // Recursive crawling with depth and limit tracking
         for (const link of pageLinks) {
           if (
             this.visitedUrls.size >= this.MAX_PAGES || 
             Date.now() - this.crawlStartTime >= this.MAX_CRAWL_TIME
           ) break;
-
+  
           if (!this.visitedUrls.has(link)) {
             try {
               // Temporary context switch
               const originalUrl = this.url;
               this.url = link;
-
+  
               // Create iframe for content loading
               const iframe = document.createElement('iframe');
               iframe.src = link;
               iframe.style.display = 'none';
               document.body.appendChild(iframe);
-
+  
               await new Promise(resolve => {
                 iframe.onload = async () => {
                   const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
-
+  
                   try {
                     // Recursive crawl with increased depth
-                    await this.crawlWebsite(depth + 1, iframeDocument, originalUrl);
+                    await this.crawlWebsite(depth + 1, iframeDocument);
                   } catch (error) {
                     console.error(`❌ WebCrawler Iframe Error for ${link}:`, error);
                   } finally {
@@ -241,7 +189,7 @@ document.addEventListener("DOMContentLoaded", initializeMixitUp);
                   }
                 };
               });
-
+  
               // Restore original URL
               this.url = originalUrl;
             } catch (error) {
@@ -249,7 +197,7 @@ document.addEventListener("DOMContentLoaded", initializeMixitUp);
             }
           }
         }
-
+  
         return Array.from(this.domainUrls);
       } catch (error) {
         console.error('❌ WebCrawler Catastrophic Error:', error);
@@ -259,17 +207,17 @@ document.addEventListener("DOMContentLoaded", initializeMixitUp);
       
     async extractText(currentDocument = document) {
       const extractionMethods = [
-        this.extractMainContentBySemantics.bind(this),
-        this.extractTextByElementTypes.bind(this),
-        this.extractTextByTreeWalker.bind(this),
-        this.extractEntireBodyText.bind(this)
+        () => this.extractMainContentBySemantics(currentDocument),
+        () => this.extractTextByElementTypes(currentDocument),
+        () => this.extractTextByTreeWalker(currentDocument),
+        () => this.extractEntireBodyText(currentDocument)
       ];
 
       let extractedContent = '';
       for (const extractor of extractionMethods) {
-        extractedContent = await extractor(currentDocument);
+        extractedContent = await extractor();
         
-        if (extractedContent && extractedContent.trim().length > 200) {
+        if (extractedContent && extractedContent.trim().length > 100) {
           console.log(`📄 Content Extraction Success:
             - Method: ${extractor.name}
             - Content Length: ${extractedContent.length} characters`);
@@ -772,28 +720,101 @@ let abortController;
     return markdown;
   }
 
+  // Add WebsiteContentCache class for managing crawled content
+  class WebsiteContentCache {
+    constructor() {
+      this.cachedContent = {};
+    }
+
+    async getCachedContent(url) {
+      // Check if content is already cached
+      if (this.cachedContent[url]) {
+        console.log('📦 Returning cached content for:', url);
+        return this.cachedContent[url];
+      }
+      return null;
+    }
+
+    async cacheWebsiteContent(url, content) {
+      // Store crawled content with timestamp
+      this.cachedContent[url] = {
+        content: content,
+        timestamp: Date.now()
+      };
+      
+      // Optional: Persist to localStorage for longer-term storage
+      try {
+        localStorage.setItem(`intellient_cache_${url}`, JSON.stringify({
+          content: content,
+          timestamp: Date.now()
+        }));
+      } catch (error) {
+        console.warn('Could not save to localStorage:', error);
+      }
+    }
+
+    isCacheValid(url, maxAgeHours = 24) {
+      const cachedItem = this.cachedContent[url] || 
+        JSON.parse(localStorage.getItem(`intellient_cache_${url}`));
+      
+      if (!cachedItem) return false;
+
+      const maxAgeMilliseconds = maxAgeHours * 60 * 60 * 1000;
+      return (Date.now() - cachedItem.timestamp) < maxAgeMilliseconds;
+    }
+  }
+
   // Modified scrapeWebsiteContent function
   async function scrapeWebsiteContent(url) {
+    const websiteContentCache = new WebsiteContentCache();
+
     try {
+      // Check for valid cached content first
+      if (websiteContentCache.isCacheValid(url)) {
+        const cachedContent = await websiteContentCache.getCachedContent(url);
+        if (cachedContent) return cachedContent.content;
+      }
+
       const contentLoader = new WebContentLoader(url);
       
-      console.log('🏠 Initiating comprehensive website crawl');
-      const crawledContent = await contentLoader.crawlWebsite();
-      
-      console.log(`🕸️ Web Crawling Results:
-        - Total Pages Crawled: ${crawledContent.length}
-        - Crawled Page URLs: ${crawledContent.map(page => page.url).join(', ')}`);
+      const isHomepage = 
+        url === window.location.origin + '/' || 
+        url === window.location.origin ||
+        url.replace(/\/$/, '') === window.location.origin;
   
-      // Combine contents from all crawled pages, prioritizing lower depth pages
-      const combinedContent = crawledContent
-        .sort((a, b) => a.depth - b.depth)  // Sort by depth
-        .map(page => `URL: ${page.url}\n\nContent:\n${page.content}`)
-        .join('\n\n---\n\n');
+      if (isHomepage) {
+        console.log('🏠 Homepage detected - initiating comprehensive website crawl');
+        const crawledContent = await contentLoader.crawlWebsite();
+        
+        console.log(`🕸️ Web Crawling Results:
+          - Total Pages Crawled: ${crawledContent.length}
+          - Crawled Page URLs: ${crawledContent.map(page => page.url).join(', ')}`);
   
-      console.log(`📊 Combined Content Stats:
-        - Total Combined Content Length: ${combinedContent.length} characters`);
+        const combinedContent = crawledContent
+          .sort((a, b) => a.depth - b.depth)
+          .map(page => `URL: ${page.url}\n\nContent:\n${page.content}`)
+          .join('\n\n---\n\n');
   
-      return combinedContent;
+        console.log(`📊 Combined Content Stats:
+          - Total Combined Content Length: ${combinedContent.length} characters`);
+
+        // Cache the combined content
+        await websiteContentCache.cacheWebsiteContent(url, combinedContent);
+  
+        return combinedContent;
+      } else {
+        const websiteContent = await contentLoader.extractText();
+        
+        console.log(`📄 Single Page Content Extraction:
+          - URL: ${url}
+          - Content Length: ${websiteContent.length} characters
+          - First 300 chars: ${websiteContent.substring(0, 300)}...`);
+
+        // Cache the single page content
+        await websiteContentCache.cacheWebsiteContent(url, websiteContent);
+  
+        return websiteContent;
+      }
     } catch (error) {
       console.error('❌ Advanced website content crawling error:', error);
       return '';
@@ -801,23 +822,18 @@ let abortController;
   }
   
   // Modified streamFromAzureOpenAI function remains the same as in your original code
-  async function streamFromAzureOpenAI(userMessage, messageElement, intelliBot) {
+  async function streamFromAzureOpenAI(
+    userMessage,
+    messageElement,
+    intelliBot
+  ) {
     abortController = new AbortController();
     const { signal } = abortController;
   
-    // Attempt to get the current website URL
     const currentWebsiteUrl = window.location.href;
   
-    // Scrape website content if applicable
-    let websiteContent;
-    try {
-      websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
-    } catch (error) {
-      console.error("Error scraping website content:", error);
-      websiteContent = ''; // Fallback to empty content
-    }
+    const websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
   
-    // Prepare context-aware prompt
     const contextAwarePrompt = websiteContent 
       ? `Context from ${currentWebsiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
       : userMessage;
@@ -843,7 +859,8 @@ let abortController;
       );
   
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
   
       const data = await response.json();
@@ -860,15 +877,14 @@ let abortController;
   
         const messagesContainer = document.getElementById("finiChatMessages");
   
-        // Flag to check if the user has scrolled up
         let userScrolledUp = false;
   
         messagesContainer.addEventListener("scroll", () => {
           const isAtBottom =
             messagesContainer.scrollHeight -
-            messagesContainer.scrollTop -
-            messagesContainer.clientHeight <
-            10; // Adjust threshold as needed
+              messagesContainer.scrollTop -
+              messagesContainer.clientHeight 
+            10;
           userScrolledUp = !isAtBottom;
         });
   
@@ -881,7 +897,7 @@ let abortController;
         for (const char of contentArray) {
           if (signal.aborted) {
             console.log("Streaming stopped");
-            return; // Exit the function early if the request is aborted
+            return;
           }
   
           displayedContent += char;
@@ -896,21 +912,20 @@ let abortController;
   
         conversationHistory.push({ role: "assistant", content: content });
       } else {
-        throw new Error("No content in response");
+        throw new Error("No content in response or unexpected response format");
       }
     } catch (error) {
+      console.error("Detailed Error:", error);
+      
       if (error.name === "AbortError") {
         messageElement.querySelector(".fini-message-content").textContent =
           "Response Stopped...";
-        console.log("Stream was aborted by user.");
       } else {
-        console.error("Error:", error);
         messageElement.querySelector(".fini-message-content").textContent =
-          "Sorry, there was an error processing your request. Please try again later.";
+          `Error: ${error.message}. Please try again.`;
       }
     }
   }
-  
 
 
 
