@@ -13,29 +13,29 @@
 
 function loadMixitUpLibrary() {
   return new Promise((resolve, reject) => {
-      const script = d.createElement('script');
-      const isLocalTest = window.location.hostname === 'localhost';
-      script.src = isLocalTest ? 'path/to/local/mixitup.min.js' : 'https://demos.kunkalabs.com/mixitup/mixitup.min.js';
-      script.onload = resolve;
-      script.onerror = reject;
-      d.head.appendChild(script);
+    const script = d.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/mixitup@3.3.1/dist/mixitup.min.js'; // Alternative trusted CDN
+    script.onload = resolve;
+    script.onerror = reject;
+    d.head.appendChild(script);
   });
 }
 
 async function initializeMixitUp() {
   try {
-      await loadMixitUpLibrary();
-      if (typeof mixitup === 'function') {
-          const mixer = mixitup('.container');
-      } else {
-          console.error("MixItUp library failed to load.");
-      }
+    await loadMixitUpLibrary();
+    if (typeof mixitup === 'function') {
+      const mixer = mixitup('.container');
+    } else {
+      console.error("MixItUp library failed to load.");
+    }
   } catch (error) {
-      console.error("Error loading MixItUp library:", error);
+    console.error("Error loading MixItUp library:", error);
   }
 }
 
 document.addEventListener("DOMContentLoaded", initializeMixitUp);
+
 
 
   // Text Embedding Utility
@@ -801,11 +801,7 @@ let abortController;
   }
   
   // Modified streamFromAzureOpenAI function remains the same as in your original code
-  async function streamFromAzureOpenAI(
-    userMessage,
-    messageElement,
-    intelliBot
-  ) {
+  async function streamFromAzureOpenAI(userMessage, messageElement, intelliBot) {
     abortController = new AbortController();
     const { signal } = abortController;
   
@@ -813,7 +809,13 @@ let abortController;
     const currentWebsiteUrl = window.location.href;
   
     // Scrape website content if applicable
-    const websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
+    let websiteContent;
+    try {
+      websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
+    } catch (error) {
+      console.error("Error scraping website content:", error);
+      websiteContent = ''; // Fallback to empty content
+    }
   
     // Prepare context-aware prompt
     const contextAwarePrompt = websiteContent 
@@ -864,8 +866,8 @@ let abortController;
         messagesContainer.addEventListener("scroll", () => {
           const isAtBottom =
             messagesContainer.scrollHeight -
-              messagesContainer.scrollTop -
-              messagesContainer.clientHeight 
+            messagesContainer.scrollTop -
+            messagesContainer.clientHeight <
             10; // Adjust threshold as needed
           userScrolledUp = !isAtBottom;
         });
@@ -903,12 +905,12 @@ let abortController;
         console.log("Stream was aborted by user.");
       } else {
         console.error("Error:", error);
-  
         messageElement.querySelector(".fini-message-content").textContent =
           "Sorry, there was an error processing your request. Please try again later.";
       }
     }
   }
+  
 
 
 
