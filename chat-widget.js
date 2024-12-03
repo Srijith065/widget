@@ -56,8 +56,8 @@
       this.originUrl = new URL(url);
       this.crawlStartTime = Date.now();
       this.MAX_CRAWL_TIME = 15000; // 15 seconds max crawl time
-      this.MAX_PAGES = 10; // Limit total pages
-      this.MAX_DEPTH = 3; // Limit crawl depth
+      this.MAX_PAGES = 100; // Limit total pages
+      this.MAX_DEPTH = 100; // Limit crawl depth
     }
   
     // Improved URL validation and filtering
