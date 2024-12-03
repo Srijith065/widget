@@ -52,18 +52,24 @@ class WebContentLoader {
   }
 
   extractText() {
-    // Enhanced content extraction strategies
+    // Comprehensive content extraction strategies
     const contentExtractors = [
       this.extractMainContentBySemantics.bind(this),
+      this.extractDetailedPageContent.bind(this),
       this.extractTextByElementTypes.bind(this),
-      this.extractTextByTreeWalker.bind(this),
-      this.extractContentUsingAdvancedSelectors.bind(this)
+      this.extractTextByTreeWalker.bind(this)
     ];
 
     let extractedContent = '';
     for (const extractor of contentExtractors) {
-      extractedContent = extractor();
-      if (extractedContent && extractedContent.trim().length > 200) break;
+      try {
+        extractedContent = extractor();
+        if (extractedContent && extractedContent.trim().length > 200) {
+          break;
+        }
+      } catch (error) {
+        console.warn(`Content extraction method failed:`, error);
+      }
     }
 
     return this.preprocessText(extractedContent);
@@ -71,22 +77,23 @@ class WebContentLoader {
 
   extractMainContentBySemantics() {
     const contentSelectors = [
-      'main', 'article', '.content', '#content', 
-      '.main-content', '.article-body', '.post-content',
-      '.entry-content', 'body', 
-      'div[class*="content"]', 'div[id*="content"]'
+      'main', 
+      'article', 
+      '#content', 
+      '.content', 
+      '.main-content', 
+      '.page-content', 
+      'body > div[class*="container"]',
+      '#main-content',
+      '[role="main"]'
     ];
 
     for (const selector of contentSelectors) {
-      const contentElements = document.querySelectorAll(selector);
-      if (contentElements.length > 0) {
-        const combinedText = Array.from(contentElements)
-          .map(el => el.innerText || el.textContent)
-          .join(' ')
-          .trim();
-        
-        if (combinedText.length > 200) {
-          return combinedText;
+      const contentElement = document.querySelector(selector);
+      if (contentElement) {
+        const text = this.extractTextFromElement(contentElement);
+        if (text.trim().length > 200) {
+          return text;
         }
       }
     }
@@ -94,18 +101,38 @@ class WebContentLoader {
     return '';
   }
 
+  extractDetailedPageContent() {
+    // More aggressive content extraction
+    const contentElements = document.querySelectorAll(
+      'p, h1, h2, h3, h4, h5, h6, ' + 
+      '.paragraph, .text-content, ' +
+      '[class*="text"], [class*="content"]'
+    );
+
+    const textParts = [];
+    contentElements.forEach(el => {
+      const text = this.extractTextFromElement(el);
+      if (text.trim().length > 10 && !this.isNavigationOrRepetitiveText(text)) {
+        textParts.push(text);
+      }
+    });
+
+    return textParts.join(' ');
+  }
+
   extractTextByElementTypes() {
     const importantElements = [
-      'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
-      'article', 'section', 'div', 'span', 
-      '[class*="text"]', '[class*="paragraph"]'
+      'article', 'section', 'div', 
+      '[class*="article"]', 
+      '[class*="body"]',
+      '[id*="content"]'
     ];
 
     const textParts = [];
-    importantElements.forEach(tag => {
-      const elements = document.getElementsByTagName(tag);
-      Array.from(elements).forEach(el => {
-        const text = el.innerText || el.textContent;
+    importantElements.forEach(tagOrSelector => {
+      const elements = document.querySelectorAll(tagOrSelector);
+      elements.forEach(el => {
+        const text = this.extractTextFromElement(el);
         if (text.trim().length > 10 && !this.isNavigationOrRepetitiveText(text)) {
           textParts.push(text);
         }
@@ -119,62 +146,52 @@ class WebContentLoader {
     const walker = document.createTreeWalker(
       document.body, 
       NodeFilter.SHOW_TEXT,
-      null,
+      {
+        acceptNode: (node) => {
+          const text = node.textContent.trim();
+          return (text.length > 10 && !this.isNavigationOrRepetitiveText(text)) 
+            ? NodeFilter.FILTER_ACCEPT 
+            : NodeFilter.FILTER_SKIP;
+        }
+      },
       false
     );
 
-    let text = '';
-    const filteredTexts = [];
+    const textParts = [];
     while(walker.nextNode()) {
-      const nodeText = walker.currentNode.textContent.trim();
-      if (nodeText.length > 10 && !this.isNavigationOrRepetitiveText(nodeText)) {
-        filteredTexts.push(nodeText);
-      }
+      textParts.push(walker.currentNode.textContent.trim());
     }
 
-    return filteredTexts.join(' ');
+    return textParts.join(' ');
   }
 
-  extractContentUsingAdvancedSelectors() {
-    const advancedSelectors = [
-      '[data-content]', 
-      '[data-text]', 
-      '.page-content', 
-      '.blog-content', 
-      '.article-body'
-    ];
+  extractTextFromElement(element) {
+    // Helper method to safely extract text from an element
+    if (!element) return '';
+    
+    // Remove script, style, and hidden elements
+    const clonedElement = element.cloneNode(true);
+    const scriptsToRemove = clonedElement.querySelectorAll('script, style, [hidden], .hidden');
+    scriptsToRemove.forEach(el => el.remove());
 
-    for (const selector of advancedSelectors) {
-      const contentElements = document.querySelectorAll(selector);
-      if (contentElements.length > 0) {
-        const combinedText = Array.from(contentElements)
-          .map(el => el.innerText || el.textContent)
-          .join(' ')
-          .trim();
-        
-        if (combinedText.length > 200) {
-          return combinedText;
-        }
-      }
-    }
-
-    return '';
+    return clonedElement.innerText || clonedElement.textContent || '';
   }
 
-  // Helper method to filter out navigation or repetitive text
   isNavigationOrRepetitiveText(text) {
     const navigationPatterns = [
       /\b(menu|navigation|footer|copyright|privacy|terms)\b/i,
       /\b(contact|about|home|login|signup)\b/i,
       /\d{4} all rights reserved/i,
-      /powered by/i
+      /powered by/i,
+      /\b(print|share|email)\b/i
     ];
 
     return navigationPatterns.some(pattern => pattern.test(text));
   }
 
   preprocessText(text) {
-    // Enhanced text preprocessing
+    if (!text) return '';
+
     return text
       .replace(/\s+/g, ' ')           // Normalize whitespace
       .replace(/[^\w\s.,!?:-]/g, '')  // Remove special characters while keeping some punctuation
@@ -580,43 +597,16 @@ let abortController;
 // Modify scrapeWebsiteContent to use fetch for cross-page content extraction
 async function scrapeWebsiteContent(url) {
   try {
-    // First, try to fetch the page content directly
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    });
+    // First, try to extract content from the current page
+    const contentLoader = new WebContentLoader(url);
+    const websiteContent = contentLoader.extractText();
+    
+    console.log(`Web Content Extraction Debug:
+      - URL: ${url}
+      - Content Length: ${websiteContent.length} characters
+      - First 300 chars: ${websiteContent.substring(0, 300)}...`);
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const htmlContent = await response.text();
-
-    // Create a temporary DOM parser
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(htmlContent, 'text/html');
-
-    // Temporarily replace the current document
-    const originalDocument = document;
-    Object.defineProperty(window, 'document', { value: doc, writable: true });
-
-    try {
-      const contentLoader = new WebContentLoader(url);
-      const websiteContent = contentLoader.extractText();
-      
-      console.log(`Web Content Extraction Debug:
-        - URL: ${url}
-        - Content Length: ${websiteContent.length} characters
-        - First 300 chars: ${websiteContent.substring(0, 300)}...`);
-
-      return websiteContent;
-    } finally {
-      // Restore the original document
-      Object.defineProperty(window, 'document', { value: originalDocument, writable: true });
-    }
+    return websiteContent;
   } catch (error) {
     console.error('Website content extraction error:', error);
     return '';
