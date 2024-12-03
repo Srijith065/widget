@@ -1,5 +1,3 @@
-// Crawl sites - Devops:
-
 (function (w, d) {
   // Text Embedding Utility
   class TextEmbedding {
@@ -780,16 +778,11 @@ let abortController;
   
     // Scrape website content if applicable
     const websiteContent = await scrapeWebsiteContent(currentWebsiteUrl);
-    const truncatedWebsiteContent = websiteContent.substring(0, 10000); // Limit to first 10,000 characters
-
-    const contextAwarePrompt = truncatedWebsiteContent 
-  ? `Context from ${currentWebsiteUrl}: ${truncatedWebsiteContent}\n\nUser Query: ${userMessage}`
-  : userMessage;
   
-    // // Prepare context-aware prompt
-    // const contextAwarePrompt = websiteContent 
-    //   ? `Context from ${currentWebsiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
-    //   : userMessage;
+    // Prepare context-aware prompt
+    const contextAwarePrompt = websiteContent 
+      ? `Context from ${currentWebsiteUrl}: ${websiteContent}\n\nUser Query: ${userMessage}`
+      : userMessage;
   
     conversationHistory.push({ role: "user", content: contextAwarePrompt });
   
