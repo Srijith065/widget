@@ -45,35 +45,56 @@
   }
 
   // Advanced Web Content Loader
-    // Enhanced WebContentLoader with website crawling capabilities
-    class WebContentLoader {
-      constructor(url, maxTokens = 5000) {
-        this.url = url;
-        this.maxTokens = maxTokens;
-        this.embeddingUtility = new TextEmbedding(maxTokens);
-        this.visitedUrls = new Set();
-        this.domainUrls = new Set();
-      }
+  class WebContentLoader {
+    constructor(url, maxTokens = 5000) {
+      this.url = url;
+      this.maxTokens = maxTokens;
+      this.embeddingUtility = new TextEmbedding(maxTokens);
+      this.visitedUrls = new Set();
+      this.domainUrls = new Set();
+      this.originHostname = new URL(url).hostname;
+      this.originProtocol = new URL(url).protocol;
+      this.originPort = new URL(url).port;
+    }
   
       // Method to extract all links from the current page
       async discoverPageLinks() {
-        // Try different methods to find links
         const linkSources = [
-          () => Array.from(document.getElementsByTagName('a')),
-          () => Array.from(document.querySelectorAll('a[href]')),
-          () => Array.from(document.querySelectorAll('link[href]'))
+          () => {
+            // Primary method: use document.links for broader compatibility
+            return Array.from(document.links)
+              .map(link => link.href)
+              .filter(href => href.trim() !== '');
+          },
+          () => {
+            // Fallback: query selector for all anchor tags
+            return Array.from(document.querySelectorAll('a[href]'))
+              .map(a => {
+                try {
+                  // Resolve relative URLs
+                  return new URL(a.getAttribute('href'), this.url).href;
+                } catch {
+                  return null;
+                }
+              })
+              .filter(href => href !== null);
+          }
         ];
     
         let links = [];
         for (const source of linkSources) {
-          links = source().map(a => a.href || a.getAttribute('href')).filter(href => {
+          links = source().filter(href => {
             try {
-              const url = new URL(href, this.url);
+              const url = new URL(href);
               
-              // Strict filtering conditions
+              // More permissive URL matching for local development
+              const isSameOrigin = 
+                url.hostname === this.originHostname &&
+                url.protocol === this.originProtocol &&
+                url.port === this.originPort;
+    
               return (
-                url.hostname === this.originHostname && 
-                (url.protocol === 'http:' || url.protocol === 'https:') &&
+                isSameOrigin &&
                 !this.visitedUrls.has(href) &&
                 !href.includes('#') &&
                 !href.includes('javascript:') &&
@@ -90,16 +111,19 @@
           if (links.length > 0) break;
         }
     
-        console.log(`WebCrawler Debug: Found ${links.length} unique links`);
+        console.log(`🔍 WebCrawler Link Discovery:
+          - Total Unique Links Found: ${links.length}
+          - Links: ${links.join(', ')}`);
+    
         return [...new Set(links)];
       }
   
       async crawlWebsite(depth = 3, currentDepth = 0) {
-        console.log(`WebCrawler: Crawling ${this.url} (Depth: ${currentDepth})`);
+        console.log(`🌐 WebCrawler: Crawling ${this.url} (Depth: ${currentDepth})`);
     
         // Prevent infinite recursion and limit total pages
         if (currentDepth >= depth || this.visitedUrls.size >= 20) {
-          console.log('WebCrawler: Reached maximum crawl depth or page limit');
+          console.log('🛑 WebCrawler: Reached maximum crawl depth or page limit');
           return Array.from(this.domainUrls);
         }
     
@@ -114,12 +138,12 @@
             });
             this.visitedUrls.add(this.url);
             
-            console.log(`WebCrawler: Added page ${this.url} (Content Length: ${currentPageContent.length})`);
+            console.log(`✅ WebCrawler: Added page ${this.url}
+              - Content Length: ${currentPageContent.length} characters`);
           }
     
           // Discover links on the current page
           const pageLinks = await this.discoverPageLinks();
-          console.log(`WebCrawler: Discovered ${pageLinks.length} potential links`);
     
           // Recursive crawling of links
           for (const link of pageLinks) {
@@ -131,49 +155,88 @@
                 const originalUrl = this.url;
                 this.url = link;
     
-                // Load page content
-                const pageContent = await this.extractText();
-                
-                if (pageContent && pageContent.length > 200) {
-                  this.domainUrls.add({
-                    url: link,
-                    content: pageContent
-                  });
-                  
-                  // Continue crawling recursively
-                  await this.crawlWebsite(depth, currentDepth + 1);
-                }
+                // Create a temporary iframe to load and extract content
+                const iframe = document.createElement('iframe');
+                iframe.src = link;
+                iframe.style.display = 'none';
+                document.body.appendChild(iframe);
+    
+                await new Promise(resolve => {
+                  iframe.onload = async () => {
+                    // Switch iframe context
+                    const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
+                    
+                    // Temporarily replace document methods
+                    const originalDocument = document;
+                    global.document = iframeDocument;
+    
+                    try {
+                      // Load page content
+                      const pageContent = await this.extractText();
+                      
+                      if (pageContent && pageContent.length > 200) {
+                        this.domainUrls.add({
+                          url: link,
+                          content: pageContent
+                        });
+                        
+                        // Continue crawling recursively
+                        await this.crawlWebsite(depth, currentDepth + 1);
+                      }
+                    } catch (error) {
+                      console.error(`❌ WebCrawler Error in iframe for ${link}:`, error);
+                    } finally {
+                      // Restore original document
+                      global.document = originalDocument;
+                      document.body.removeChild(iframe);
+                      resolve();
+                    }
+                  };
+                });
     
                 // Restore original URL
                 this.url = originalUrl;
               } catch (error) {
-                console.error(`WebCrawler Error crawling ${link}:`, error);
+                console.error(`❌ WebCrawler Global Error crawling ${link}:`, error);
               }
             }
           }
     
           return Array.from(this.domainUrls);
         } catch (error) {
-          console.error('WebCrawler Global Error:', error);
+          console.error('❌ WebCrawler Catastrophic Error:', error);
           return Array.from(this.domainUrls);
         }
       }
+    
 
-    async extractText() {
-      const contentExtractors = [
-        this.extractMainContentBySemantics.bind(this),
-        this.extractTextByElementTypes.bind(this),
-        this.extractTextByTreeWalker.bind(this)
-      ];
-
-      let extractedContent = '';
-      for (const extractor of contentExtractors) {
-        extractedContent = await extractor();
-        if (extractedContent && extractedContent.trim().length > 200) break;
+      async extractText() {
+        const extractionMethods = [
+          this.extractMainContentBySemantics.bind(this),
+          this.extractTextByElementTypes.bind(this),
+          this.extractTextByTreeWalker.bind(this),
+          this.extractEntireBodyText.bind(this)
+        ];
+    
+        let extractedContent = '';
+        for (const extractor of extractionMethods) {
+          extractedContent = await extractor();
+          
+          if (extractedContent && extractedContent.trim().length > 100) {
+            console.log(`📄 Content Extraction Success:
+              - Method: ${extractor.name}
+              - Content Length: ${extractedContent.length} characters`);
+            break;
+          }
+        }
+    
+        return this.preprocessText(extractedContent);
       }
-
-      return this.preprocessText(extractedContent);
-    }
+    
+      // New method: extract entire body text as a last resort
+      async extractEntireBodyText() {
+        return document.body.innerText || document.body.textContent || '';
+      }
 
     async extractMainContentBySemantics() {
       const contentSelectors = [
@@ -633,48 +696,48 @@ let abortController;
   }
 
   // Modified scrapeWebsiteContent function
-async function scrapeWebsiteContent(url) {
-  try {
-    const contentLoader = new WebContentLoader(url);
-    
-    // Detect homepage conditions
-    const isHomepage = 
-      url === window.location.origin + '/' || 
-      url === window.location.origin;
-
-    if (isHomepage) {
-      console.log('🌐 Homepage detected - initiating comprehensive website crawl');
-      const crawledContent = await contentLoader.crawlWebsite();
+  async function scrapeWebsiteContent(url) {
+    try {
+      const contentLoader = new WebContentLoader(url);
       
-      console.log(`🕸️ Web Crawling Results:
-        - Total Pages Crawled: ${crawledContent.length}
-        - Crawled Page URLs: ${crawledContent.map(page => page.url).join(', ')}`);
-
-      // Combine contents from all crawled pages
-      const combinedContent = crawledContent
-        .map(page => `URL: ${page.url}\n\nContent:\n${page.content}`)
-        .join('\n\n---\n\n');
-
-      console.log(`📊 Combined Content Stats:
-        - Total Combined Content Length: ${combinedContent.length} characters`);
-
-      return combinedContent;
-    } else {
-      // For non-homepage, use existing extraction method
-      const websiteContent = await contentLoader.extractText();
-      
-      console.log(`📄 Single Page Content Extraction:
-        - URL: ${url}
-        - Content Length: ${websiteContent.length} characters
-        - First 300 chars: ${websiteContent.substring(0, 300)}...`);
-
-      return websiteContent;
+      // Detect homepage conditions
+      const isHomepage = 
+        url === window.location.origin + '/' || 
+        url === window.location.origin;
+  
+      if (isHomepage) {
+        console.log('🏠 Homepage detected - initiating comprehensive website crawl');
+        const crawledContent = await contentLoader.crawlWebsite();
+        
+        console.log(`🕸️ Web Crawling Results:
+          - Total Pages Crawled: ${crawledContent.length}
+          - Crawled Page URLs: ${crawledContent.map(page => page.url).join(', ')}`);
+  
+        // Combine contents from all crawled pages
+        const combinedContent = crawledContent
+          .map(page => `URL: ${page.url}\n\nContent:\n${page.content}`)
+          .join('\n\n---\n\n');
+  
+        console.log(`📊 Combined Content Stats:
+          - Total Combined Content Length: ${combinedContent.length} characters`);
+  
+        return combinedContent;
+      } else {
+        // For non-homepage, use existing extraction method
+        const websiteContent = await contentLoader.extractText();
+        
+        console.log(`📄 Single Page Content Extraction:
+          - URL: ${url}
+          - Content Length: ${websiteContent.length} characters
+          - First 300 chars: ${websiteContent.substring(0, 300)}...`);
+  
+        return websiteContent;
+      }
+    } catch (error) {
+      console.error('❌ Advanced website content crawling error:', error);
+      return '';
     }
-  } catch (error) {
-    console.error('❌ Advanced website content crawling error:', error);
-    return '';
   }
-}
   
   // Modified streamFromAzureOpenAI function remains the same as in your original code
   async function streamFromAzureOpenAI(
