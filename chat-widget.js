@@ -1,5 +1,3 @@
-// DevOps backup - 3-12-2024:Sigle page contentLoader
-
 (function (w, d) {
   // Text Embedding Utility
   class TextEmbedding {
@@ -56,139 +54,153 @@
       this.originHostname = new URL(url).hostname;
       this.originProtocol = new URL(url).protocol;
       this.originPort = new URL(url).port || '';
-      
-      // Dynamic crawling configurations
-      this.maxCrawlTime = 30000; // 30 seconds max crawl time
-      this.maxPagesDefault = 50; // Default max pages to crawl
-      this.crawlStartTime = null;
-      this.urlPriority = new Map(); // Track URL priority for smarter crawling
     }
   
-    // Enhanced URL filtering with more sophisticated rules
-    isValidCrawlUrl(href) {
-      try {
-        const url = new URL(href);
-        
-        // More comprehensive URL validation
-        const isValidExtension = ![
-          '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.svg', 
-          '.zip', '.exe', '.doc', '.docx', '.xls', '.xlsx'
-        ].some(ext => href.toLowerCase().endsWith(ext));
-  
-        const isSameOrigin = 
-          url.hostname === this.originHostname &&
-          url.protocol === this.originProtocol &&
-          url.port === this.originPort;
-  
-        const isNotFragmentOrScript = 
-          !href.includes('#') && 
-          !href.startsWith('javascript:') &&
-          !href.startsWith('data:');
-  
-        return (
-          isSameOrigin &&
-          isValidExtension &&
-          isNotFragmentOrScript &&
-          !this.visitedUrls.has(href)
-        );
-      } catch {
-        return false;
-      }
-    }
-  
-    // Intelligent link prioritization
-    prioritizeLinks(links) {
-      // Prioritize links based on various heuristics
-      return links.sort((a, b) => {
-        // Prefer shorter paths (closer to root)
-        const aPathLength = new URL(a).pathname.split('/').length;
-        const bPathLength = new URL(b).pathname.split('/').length;
-  
-        // Consider depth and previous priority
-        const aPriority = this.urlPriority.get(a) || 0;
-        const bPriority = this.urlPriority.get(b) || 0;
-  
-        return aPathLength - bPathLength + bPriority - aPriority;
-      }).slice(0, 20); // Limit to top 20 most promising links
-    }
-  
-    async crawlWebsite(options = {}) {
-      const {
-        maxPages = this.maxPagesDefault, 
-        maxTime = this.maxCrawlTime
-      } = options;
-  
-      console.log(`🌐 WebCrawler: Starting comprehensive crawl of ${this.url}`);
-      this.crawlStartTime = Date.now();
-  
-      // Reset crawl state
-      this.visitedUrls.clear();
-      this.domainUrls.clear();
-  
-      const crawlQueue = [this.url];
-      
-      while (
-        crawlQueue.length > 0 && 
-        this.visitedUrls.size < maxPages &&
-        (Date.now() - this.crawlStartTime) < maxTime
-      ) {
-        const currentUrl = crawlQueue.shift();
-  
-        if (this.visitedUrls.has(currentUrl)) continue;
-  
-        try {
-          // Create a temporary iframe to load and extract content
-          const iframe = document.createElement('iframe');
-          iframe.src = currentUrl;
-          iframe.style.display = 'none';
-          document.body.appendChild(iframe);
-  
-          await new Promise(resolve => {
-            iframe.onload = async () => {
+    // Method to extract all links from the current page
+    async discoverPageLinks(currentDocument) {
+      const linkSources = [
+        () => {
+          // Primary method: use document.links for broader compatibility
+          return Array.from(currentDocument.links)
+            .map(link => link.href)
+            .filter(href => href.trim() !== '');
+        },
+        () => {
+          // Fallback: query selector for all anchor tags
+          return Array.from(currentDocument.querySelectorAll('a[href]'))
+            .map(a => {
               try {
-                const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
-                const pageContent = await this.extractText(iframeDocument);
-  
-                if (pageContent && pageContent.length > 200) {
-                  this.domainUrls.add({
-                    url: currentUrl,
-                    content: pageContent
-                  });
-                  this.visitedUrls.add(currentUrl);
-  
-                  // Discover and prioritize new links
-                  const pageLinks = await this.discoverPageLinks(iframeDocument)
-                    .then(links => links.filter(this.isValidCrawlUrl.bind(this)))
-                    .then(this.prioritizeLinks.bind(this));
-  
-                  // Add new links to queue
-                  crawlQueue.push(...pageLinks);
-  
-                  console.log(`🕸️ Crawled: ${currentUrl}
-                    - Content Length: ${pageContent.length}
-                    - Total Pages: ${this.visitedUrls.size}
-                    - Remaining Queue: ${crawlQueue.length}`);
-                }
-              } catch (error) {
-                console.warn(`❌ Error processing ${currentUrl}:`, error);
-              } finally {
-                document.body.removeChild(iframe);
-                resolve();
+                // Resolve relative URLs
+                return new URL(a.getAttribute('href'), this.url).href;
+              } catch {
+                return null;
               }
-            };
-          });
+            })
+            .filter(href => href !== null);
+        }
+      ];
   
+      let links = [];
+      for (const source of linkSources) {
+        links = source().filter(href => {
+          try {
+            const url = new URL(href);
+            
+            // More permissive URL matching for local development
+            const isSameOrigin = 
+              url.hostname === this.originHostname &&
+              url.protocol === this.originProtocol &&
+              url.port === this.originPort;
+  
+            return (
+              isSameOrigin &&
+              !this.visitedUrls.has(href) &&
+              !href.includes('#') &&
+              !href.includes('javascript:') &&
+              !href.endsWith('.pdf') &&
+              !href.endsWith('.jpg') &&
+              !href.endsWith('.png') &&
+              !href.endsWith('.gif')
+            );
+          } catch {
+            return false;
+          }
+        });
+  
+        if (links.length > 0) break;
+      }
+  
+      console.log(`🔍 WebCrawler Link Discovery:
+        - Total Unique Links Found: ${links.length}
+        - Links: ${links.join(', ')}`);
+  
+      return [...new Set(links)];
+    }
+  
+      async crawlWebsite(depth = 10, currentDepth = 0, currentDocument = document) {
+        console.log(`🌐 WebCrawler: Crawling ${this.url} (Depth: ${currentDepth})`);
+    
+        // Prevent infinite recursion and limit total pages
+        if (currentDepth >= depth || this.visitedUrls.size >= 100) {
+          console.log('🛑 WebCrawler: Reached maximum crawl depth or page limit');
+          return Array.from(this.domainUrls);
+        }        
+    
+        try {
+          // Extract current page content
+          const currentPageContent = await this.extractText(currentDocument);
+          
+          if (currentPageContent && currentPageContent.length > 200) {
+            this.domainUrls.add({
+              url: this.url,
+              content: currentPageContent
+            });
+            this.visitedUrls.add(this.url);
+            
+            console.log(`✅ WebCrawler: Added page ${this.url}
+              - Content Length: ${currentPageContent.length} characters`);
+          }
+    
+          // Discover links on the current page
+          const pageLinks = await this.discoverPageLinks(currentDocument);
+    
+          // Recursive crawling of links
+          for (const link of pageLinks) {
+            if (this.visitedUrls.size >= 20) break;
+    
+            if (!this.visitedUrls.has(link)) {
+              try {
+                // Temporarily switch context
+                const originalUrl = this.url;
+                this.url = link;
+    
+                // Create a temporary iframe to load and extract content
+                const iframe = document.createElement('iframe');
+                iframe.src = link;
+                iframe.style.display = 'none';
+                document.body.appendChild(iframe);
+    
+                await new Promise(resolve => {
+                  iframe.onload = async () => {
+                    // Switch iframe context
+                    const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
+    
+                    try {
+                      // Load page content
+                      const pageContent = await this.extractText(iframeDocument);
+                      
+                      if (pageContent && pageContent.length > 200) {
+                        this.domainUrls.add({
+                          url: link,
+                          content: pageContent
+                        });
+                        
+                        // Continue crawling recursively
+                        await this.crawlWebsite(depth, currentDepth + 1, iframeDocument);
+                      }
+                    } catch (error) {
+                      console.error(`❌ WebCrawler Error in iframe for ${link}:`, error);
+                    } finally {
+                      document.body.removeChild(iframe);
+                      resolve();
+                    }
+                  };
+                });
+    
+                // Restore original URL
+                this.url = originalUrl;
+              } catch (error) {
+                console.error(`❌ WebCrawler Global Error crawling ${link}:`, error);
+              }
+            }
+          }
+    
+          return Array.from(this.domainUrls);
         } catch (error) {
-          console.error(`❌ Crawling error for ${currentUrl}:`, error);
+          console.error('❌ WebCrawler Catastrophic Error:', error);
+          return Array.from(this.domainUrls);
         }
       }
-  
-      console.log(`🏁 WebCrawler Completed:
-        - Total Unique Pages: ${this.visitedUrls.size}
-        - Crawl Duration: ${(Date.now() - this.crawlStartTime)/1000} seconds`);
-  
-      return Array.from(this.domainUrls);
-    }
       
       async extractText(currentDocument = document) {
         const extractionMethods = [
