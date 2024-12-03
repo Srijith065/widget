@@ -44,16 +44,120 @@
     }
   }
 
-  // Advanced Web Content Loader with Crawling
-  class WebContentLoader {
-    constructor(url, maxTokens = 5000, maxDepth = 3) {
-      this.url = url;
-      this.maxTokens = maxTokens;
-      this.maxDepth = maxDepth;
-      this.embeddingUtility = new TextEmbedding(maxTokens);
-      this.visitedUrls = new Set();
-      this.websiteContent = [];
-    }
+  // Advanced Web Content Loader
+    // Enhanced WebContentLoader with website crawling capabilities
+    class WebContentLoader {
+      constructor(url, maxTokens = 5000) {
+        this.url = url;
+        this.maxTokens = maxTokens;
+        this.embeddingUtility = new TextEmbedding(maxTokens);
+        this.visitedUrls = new Set();
+        this.domainUrls = new Set();
+      }
+  
+      // Method to extract all links from the current page
+      async discoverPageLinks() {
+        // Try different methods to find links
+        const linkSources = [
+          () => Array.from(document.getElementsByTagName('a')),
+          () => Array.from(document.querySelectorAll('a[href]')),
+          () => Array.from(document.querySelectorAll('link[href]'))
+        ];
+    
+        let links = [];
+        for (const source of linkSources) {
+          links = source().map(a => a.href || a.getAttribute('href')).filter(href => {
+            try {
+              const url = new URL(href, this.url);
+              
+              // Strict filtering conditions
+              return (
+                url.hostname === this.originHostname && 
+                (url.protocol === 'http:' || url.protocol === 'https:') &&
+                !this.visitedUrls.has(href) &&
+                !href.includes('#') &&
+                !href.includes('javascript:') &&
+                !href.endsWith('.pdf') &&
+                !href.endsWith('.jpg') &&
+                !href.endsWith('.png') &&
+                !href.endsWith('.gif')
+              );
+            } catch {
+              return false;
+            }
+          });
+    
+          if (links.length > 0) break;
+        }
+    
+        console.log(`WebCrawler Debug: Found ${links.length} unique links`);
+        return [...new Set(links)];
+      }
+  
+      async crawlWebsite(depth = 3, currentDepth = 0) {
+        console.log(`WebCrawler: Crawling ${this.url} (Depth: ${currentDepth})`);
+    
+        // Prevent infinite recursion and limit total pages
+        if (currentDepth >= depth || this.visitedUrls.size >= 20) {
+          console.log('WebCrawler: Reached maximum crawl depth or page limit');
+          return Array.from(this.domainUrls);
+        }
+    
+        try {
+          // Extract current page content
+          const currentPageContent = await this.extractText();
+          
+          if (currentPageContent && currentPageContent.length > 200) {
+            this.domainUrls.add({
+              url: this.url,
+              content: currentPageContent
+            });
+            this.visitedUrls.add(this.url);
+            
+            console.log(`WebCrawler: Added page ${this.url} (Content Length: ${currentPageContent.length})`);
+          }
+    
+          // Discover links on the current page
+          const pageLinks = await this.discoverPageLinks();
+          console.log(`WebCrawler: Discovered ${pageLinks.length} potential links`);
+    
+          // Recursive crawling of links
+          for (const link of pageLinks) {
+            if (this.visitedUrls.size >= 20) break;
+    
+            if (!this.visitedUrls.has(link)) {
+              try {
+                // Temporarily switch context
+                const originalUrl = this.url;
+                this.url = link;
+    
+                // Load page content
+                const pageContent = await this.extractText();
+                
+                if (pageContent && pageContent.length > 200) {
+                  this.domainUrls.add({
+                    url: link,
+                    content: pageContent
+                  });
+                  
+                  // Continue crawling recursively
+                  await this.crawlWebsite(depth, currentDepth + 1);
+                }
+    
+                // Restore original URL
+                this.url = originalUrl;
+              } catch (error) {
+                console.error(`WebCrawler Error crawling ${link}:`, error);
+              }
+            }
+          }
+    
+          return Array.from(this.domainUrls);
+        } catch (error) {
+          console.error('WebCrawler Global Error:', error);
+          return Array.from(this.domainUrls);
+        }
+      }
 
     async extractText() {
       const contentExtractors = [
@@ -134,126 +238,9 @@
         .substring(0, this.maxTokens);
     }
 
-    // New method to extract links from the page
-    extractLinksFromPage(baseUrl) {
-      const links = [];
-      const anchorElements = document.getElementsByTagName('a');
-      
-      for (const anchor of anchorElements) {
-        let href = anchor.getAttribute('href');
-        if (!href) continue;
-
-        // Normalize and validate URL
-        try {
-          const url = new URL(href, baseUrl);
-          
-          // Filter out external links, anchors, and already visited URLs
-          if (url.origin === new URL(baseUrl).origin && 
-              !url.pathname.startsWith('#') && 
-              !this.visitedUrls.has(url.href) &&
-              !url.href.match(/\.(pdf|jpg|jpeg|png|gif|svg|mp4|mp3)$/i)) {
-            links.push(url.href);
-          }
-        } catch (error) {
-          console.warn('Invalid URL processing:', href, error);
-        }
-      }
-
-      return [...new Set(links)];
-    }
-
-    // Recursive method to crawl website
-    async crawlWebsite(currentUrl, depth = 0) {
-      if (depth >= this.maxDepth || this.visitedUrls.has(currentUrl)) {
-        return;
-      }
-
-      this.visitedUrls.add(currentUrl);
-
-      try {
-        // Temporarily override window.location for content extraction
-        const originalLocation = { ...window.location };
-        Object.defineProperty(window, 'location', {
-          value: { ...window.location, href: currentUrl },
-          writable: false
-        });
-
-        // Create a temporary iframe to load and extract content
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = currentUrl;
-        document.body.appendChild(iframe);
-
-        await new Promise(resolve => {
-          iframe.onload = async () => {
-            try {
-              // Switch to iframe's document context
-              const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
-              
-              // Temporarily replace document for content extraction
-              const originalDocument = { ...document };
-              Object.defineProperty(window, 'document', {
-                value: iframeDocument,
-                writable: false
-              });
-
-              // Extract page content
-              const pageContent = await this.extractText();
-              
-              if (pageContent && pageContent.trim().length > 200) {
-                this.websiteContent.push({
-                  url: currentUrl,
-                  content: pageContent
-                });
-              }
-
-              // Extract and crawl links
-              const links = this.extractLinksFromPage(currentUrl);
-              console.log("crawledURLS", links);
-              
-              // Restore original document
-              Object.defineProperty(window, 'document', {
-                value: originalDocument,
-                writable: false
-              });
-
-              // Recursively crawl links
-              for (const link of links) {
-                await this.crawlWebsite(link, depth + 1);
-              }
-
-              resolve();
-            } catch (extractionError) {
-              console.error('Content extraction error:', extractionError);
-              resolve();
-            } finally {
-              document.body.removeChild(iframe);
-            }
-          };
-        });
-
-        // Restore original location
-        Object.defineProperty(window, 'location', {
-          value: originalLocation,
-          writable: false
-        });
-
-      } catch (error) {
-        console.error('Website crawling error:', error);
-      }
-    }
-
-      // Method to process website content and generate embeddings
-    async processWebsiteContent() {
-      await this.crawlWebsite(this.url);
-      
-      // Combine all website content
-      const combinedContent = this.websiteContent
-        .map(page => `URL: ${page.url}\n\nContent: ${page.content}`)
-        .join('\n\n---\n\n');
-      
-      // Chunk and generate embeddings
-      const textChunks = this.embeddingUtility.preprocessAndChunk(combinedContent);
+    async processContentEmbedding() {
+      const extractedText = await this.extractText();
+      const textChunks = this.embeddingUtility.preprocessAndChunk(extractedText);
       return await this.embeddingUtility.generateEmbeddings(textChunks);
     }
   }
@@ -646,30 +633,51 @@ let abortController;
   }
 
   // Modified scrapeWebsiteContent function
-  async function scrapeWebsiteContent(url) {
-    try {
-      const contentLoader = new WebContentLoader(url);
-      const websiteEmbeddings = await contentLoader.processWebsiteContent();
-      
-      console.log(`Web Content Crawling Debug:
-        - URL: ${url}
-        - Total Pages Crawled: ${contentLoader.websiteContent.length}
-        - Total Embeddings Generated: ${websiteEmbeddings.length}`);
+async function scrapeWebsiteContent(url) {
+  try {
+    const contentLoader = new WebContentLoader(url);
+    
+    // Detect homepage conditions
+    const isHomepage = 
+      url === window.location.origin + '/' || 
+      url === window.location.origin;
 
-      // Return combined content for context
-      const combinedContent = contentLoader.websiteContent
-        .map(page => page.content)
-        .join('\n\n');
+    if (isHomepage) {
+      console.log('🌐 Homepage detected - initiating comprehensive website crawl');
+      const crawledContent = await contentLoader.crawlWebsite();
+      
+      console.log(`🕸️ Web Crawling Results:
+        - Total Pages Crawled: ${crawledContent.length}
+        - Crawled Page URLs: ${crawledContent.map(page => page.url).join(', ')}`);
+
+      // Combine contents from all crawled pages
+      const combinedContent = crawledContent
+        .map(page => `URL: ${page.url}\n\nContent:\n${page.content}`)
+        .join('\n\n---\n\n');
+
+      console.log(`📊 Combined Content Stats:
+        - Total Combined Content Length: ${combinedContent.length} characters`);
 
       return combinedContent;
-    } catch (error) {
-      console.error('Advanced website content crawling error:', error);
-      return '';
+    } else {
+      // For non-homepage, use existing extraction method
+      const websiteContent = await contentLoader.extractText();
+      
+      console.log(`📄 Single Page Content Extraction:
+        - URL: ${url}
+        - Content Length: ${websiteContent.length} characters
+        - First 300 chars: ${websiteContent.substring(0, 300)}...`);
+
+      return websiteContent;
     }
+  } catch (error) {
+    console.error('❌ Advanced website content crawling error:', error);
+    return '';
   }
+}
   
-   // Modify the streamFromAzureOpenAI function to use the enhanced scraping
-   async function streamFromAzureOpenAI(
+  // Modified streamFromAzureOpenAI function remains the same as in your original code
+  async function streamFromAzureOpenAI(
     userMessage,
     messageElement,
     intelliBot
