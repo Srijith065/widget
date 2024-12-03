@@ -1,3 +1,5 @@
+// DevOps backup - 3-12-2024:Sigle page contentLoader
+
 (function (w, d) {
   // Text Embedding Utility
   class TextEmbedding {
@@ -42,170 +44,219 @@
     }
   }
 
-  // Advanced Web Content Loader
-// Simplified WebContentLoader for current page content extraction
-class WebContentLoader {
-  constructor(url, maxTokens = 5000) {
-    this.url = url;
-    this.maxTokens = maxTokens;
-    this.embeddingUtility = new TextEmbedding(maxTokens);
-  }
-
-  extractText() {
-    // Comprehensive content extraction strategies
-    const contentExtractors = [
-      this.extractMainContentBySemantics.bind(this),
-      this.extractDetailedPageContent.bind(this),
-      this.extractTextByElementTypes.bind(this),
-      this.extractTextByTreeWalker.bind(this)
-    ];
-
-    let extractedContent = '';
-    for (const extractor of contentExtractors) {
-      try {
-        extractedContent = extractor();
-        if (extractedContent && extractedContent.trim().length > 200) {
-          break;
-        }
-      } catch (error) {
-        console.warn(`Content extraction method failed:`, error);
-      }
+  // Advanced Web Content Loader with Crawling
+  class WebContentLoader {
+    constructor(url, maxTokens = 5000, maxDepth = 3) {
+      this.url = url;
+      this.maxTokens = maxTokens;
+      this.maxDepth = maxDepth;
+      this.embeddingUtility = new TextEmbedding(maxTokens);
+      this.visitedUrls = new Set();
+      this.websiteContent = [];
     }
 
-    return this.preprocessText(extractedContent);
-  }
+    async extractText() {
+      const contentExtractors = [
+        this.extractMainContentBySemantics.bind(this),
+        this.extractTextByElementTypes.bind(this),
+        this.extractTextByTreeWalker.bind(this)
+      ];
 
-  extractMainContentBySemantics() {
-    const contentSelectors = [
-      'main', 
-      'article', 
-      '#content', 
-      '.content', 
-      '.main-content', 
-      '.page-content', 
-      'body > div[class*="container"]',
-      '#main-content',
-      '[role="main"]'
-    ];
-
-    for (const selector of contentSelectors) {
-      const contentElement = document.querySelector(selector);
-      if (contentElement) {
-        const text = this.extractTextFromElement(contentElement);
-        if (text.trim().length > 200) {
-          return text;
-        }
+      let extractedContent = '';
+      for (const extractor of contentExtractors) {
+        extractedContent = await extractor();
+        if (extractedContent && extractedContent.trim().length > 200) break;
       }
+
+      return this.preprocessText(extractedContent);
     }
 
-    return '';
-  }
+    async extractMainContentBySemantics() {
+      const contentSelectors = [
+        'main', 'article', '.content', '#content', 
+        '.main-content', 'body'
+      ];
 
-  extractDetailedPageContent() {
-    // More aggressive content extraction
-    const contentElements = document.querySelectorAll(
-      'p, h1, h2, h3, h4, h5, h6, ' + 
-      '.paragraph, .text-content, ' +
-      '[class*="text"], [class*="content"]'
-    );
-
-    const textParts = [];
-    contentElements.forEach(el => {
-      const text = this.extractTextFromElement(el);
-      if (text.trim().length > 10 && !this.isNavigationOrRepetitiveText(text)) {
-        textParts.push(text);
-      }
-    });
-
-    return textParts.join(' ');
-  }
-
-  extractTextByElementTypes() {
-    const importantElements = [
-      'article', 'section', 'div', 
-      '[class*="article"]', 
-      '[class*="body"]',
-      '[id*="content"]'
-    ];
-
-    const textParts = [];
-    importantElements.forEach(tagOrSelector => {
-      const elements = document.querySelectorAll(tagOrSelector);
-      elements.forEach(el => {
-        const text = this.extractTextFromElement(el);
-        if (text.trim().length > 10 && !this.isNavigationOrRepetitiveText(text)) {
-          textParts.push(text);
+      for (const selector of contentSelectors) {
+        const contentElement = document.querySelector(selector);
+        if (contentElement) {
+          return contentElement.innerText || contentElement.textContent;
         }
+      }
+
+      return '';
+    }
+
+    async extractTextByElementTypes() {
+      const importantElements = [
+        'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+        'article', 'section', 'div'
+      ];
+
+      const textParts = [];
+      importantElements.forEach(tag => {
+        const elements = document.getElementsByTagName(tag);
+        Array.from(elements).forEach(el => {
+          const text = el.innerText || el.textContent;
+          if (text.trim().length > 10) {
+            textParts.push(text);
+          }
+        });
       });
-    });
 
-    return textParts.join(' ');
-  }
-
-  extractTextByTreeWalker() {
-    const walker = document.createTreeWalker(
-      document.body, 
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: (node) => {
-          const text = node.textContent.trim();
-          return (text.length > 10 && !this.isNavigationOrRepetitiveText(text)) 
-            ? NodeFilter.FILTER_ACCEPT 
-            : NodeFilter.FILTER_SKIP;
-        }
-      },
-      false
-    );
-
-    const textParts = [];
-    while(walker.nextNode()) {
-      textParts.push(walker.currentNode.textContent.trim());
+      return textParts.join(' ');
     }
 
-    return textParts.join(' ');
+    async extractTextByTreeWalker() {
+      const walker = document.createTreeWalker(
+        document.body, 
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
+
+      let text = '';
+      while(walker.nextNode()) {
+        const nodeText = walker.currentNode.textContent.trim();
+        if (nodeText.length > 10) {
+          text += nodeText + ' ';
+        }
+      }
+
+      return text;
+    }
+
+    preprocessText(text) {
+      return text
+        .replace(/\s+/g, ' ')
+        .replace(/[^\w\s.,!?]/g, '')
+        .trim()
+        .substring(0, this.maxTokens);
+    }
+
+    // New method to extract links from the page
+    extractLinksFromPage(baseUrl) {
+      const links = [];
+      const anchorElements = document.getElementsByTagName('a');
+      
+      for (const anchor of anchorElements) {
+        let href = anchor.getAttribute('href');
+        if (!href) continue;
+
+        // Normalize and validate URL
+        try {
+          const url = new URL(href, baseUrl);
+          
+          // Filter out external links, anchors, and already visited URLs
+          if (url.origin === new URL(baseUrl).origin && 
+              !url.pathname.startsWith('#') && 
+              !this.visitedUrls.has(url.href) &&
+              !url.href.match(/\.(pdf|jpg|jpeg|png|gif|svg|mp4|mp3)$/i)) {
+            links.push(url.href);
+          }
+        } catch (error) {
+          console.warn('Invalid URL processing:', href, error);
+        }
+      }
+
+      return [...new Set(links)];
+    }
+
+    // Recursive method to crawl website
+    async crawlWebsite(currentUrl, depth = 0) {
+      if (depth >= this.maxDepth || this.visitedUrls.has(currentUrl)) {
+        return;
+      }
+
+      this.visitedUrls.add(currentUrl);
+
+      try {
+        // Temporarily override window.location for content extraction
+        const originalLocation = { ...window.location };
+        Object.defineProperty(window, 'location', {
+          value: { ...window.location, href: currentUrl },
+          writable: false
+        });
+
+        // Create a temporary iframe to load and extract content
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = currentUrl;
+        document.body.appendChild(iframe);
+
+        await new Promise(resolve => {
+          iframe.onload = async () => {
+            try {
+              // Switch to iframe's document context
+              const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
+              
+              // Temporarily replace document for content extraction
+              const originalDocument = { ...document };
+              Object.defineProperty(window, 'document', {
+                value: iframeDocument,
+                writable: false
+              });
+
+              // Extract page content
+              const pageContent = await this.extractText();
+              
+              if (pageContent && pageContent.trim().length > 200) {
+                this.websiteContent.push({
+                  url: currentUrl,
+                  content: pageContent
+                });
+              }
+
+              // Extract and crawl links
+              const links = this.extractLinksFromPage(currentUrl);
+              console.log("crawledURLS", links);
+              
+              // Restore original document
+              Object.defineProperty(window, 'document', {
+                value: originalDocument,
+                writable: false
+              });
+
+              // Recursively crawl links
+              for (const link of links) {
+                await this.crawlWebsite(link, depth + 1);
+              }
+
+              resolve();
+            } catch (extractionError) {
+              console.error('Content extraction error:', extractionError);
+              resolve();
+            } finally {
+              document.body.removeChild(iframe);
+            }
+          };
+        });
+
+        // Restore original location
+        Object.defineProperty(window, 'location', {
+          value: originalLocation,
+          writable: false
+        });
+
+      } catch (error) {
+        console.error('Website crawling error:', error);
+      }
+    }
+
+      // Method to process website content and generate embeddings
+    async processWebsiteContent() {
+      await this.crawlWebsite(this.url);
+      
+      // Combine all website content
+      const combinedContent = this.websiteContent
+        .map(page => `URL: ${page.url}\n\nContent: ${page.content}`)
+        .join('\n\n---\n\n');
+      
+      // Chunk and generate embeddings
+      const textChunks = this.embeddingUtility.preprocessAndChunk(combinedContent);
+      return await this.embeddingUtility.generateEmbeddings(textChunks);
+    }
   }
-
-  extractTextFromElement(element) {
-    // Helper method to safely extract text from an element
-    if (!element) return '';
-    
-    // Remove script, style, and hidden elements
-    const clonedElement = element.cloneNode(true);
-    const scriptsToRemove = clonedElement.querySelectorAll('script, style, [hidden], .hidden');
-    scriptsToRemove.forEach(el => el.remove());
-
-    return clonedElement.innerText || clonedElement.textContent || '';
-  }
-
-  isNavigationOrRepetitiveText(text) {
-    const navigationPatterns = [
-      /\b(menu|navigation|footer|copyright|privacy|terms)\b/i,
-      /\b(contact|about|home|login|signup)\b/i,
-      /\d{4} all rights reserved/i,
-      /powered by/i,
-      /\b(print|share|email)\b/i
-    ];
-
-    return navigationPatterns.some(pattern => pattern.test(text));
-  }
-
-  preprocessText(text) {
-    if (!text) return '';
-
-    return text
-      .replace(/\s+/g, ' ')           // Normalize whitespace
-      .replace(/[^\w\s.,!?:-]/g, '')  // Remove special characters while keeping some punctuation
-      .replace(/\b(https?:\/\/\S+)/g, '')  // Remove URLs
-      .trim()
-      .substring(0, this.maxTokens);  // Limit to max tokens
-  }
-
-  async processContentEmbedding() {
-    const extractedText = this.extractText();
-    const textChunks = this.embeddingUtility.preprocessAndChunk(extractedText);
-    return await this.embeddingUtility.generateEmbeddings(textChunks);
-  }
-}
 
   // Existing code from the original script continues here...
   const msalConfig = {
@@ -594,27 +645,31 @@ let abortController;
     return markdown;
   }
 
-// Modify scrapeWebsiteContent to use fetch for cross-page content extraction
-async function scrapeWebsiteContent(url) {
-  try {
-    // First, try to extract content from the current page
-    const contentLoader = new WebContentLoader(url);
-    const websiteContent = contentLoader.extractText();
-    
-    console.log(`Web Content Extraction Debug:
-      - URL: ${url}
-      - Content Length: ${websiteContent.length} characters
-      - First 300 chars: ${websiteContent.substring(0, 300)}...`);
+  // Modified scrapeWebsiteContent function
+  async function scrapeWebsiteContent(url) {
+    try {
+      const contentLoader = new WebContentLoader(url);
+      const websiteEmbeddings = await contentLoader.processWebsiteContent();
+      
+      console.log(`Web Content Crawling Debug:
+        - URL: ${url}
+        - Total Pages Crawled: ${contentLoader.websiteContent.length}
+        - Total Embeddings Generated: ${websiteEmbeddings.length}`);
 
-    return websiteContent;
-  } catch (error) {
-    console.error('Website content extraction error:', error);
-    return '';
+      // Return combined content for context
+      const combinedContent = contentLoader.websiteContent
+        .map(page => page.content)
+        .join('\n\n');
+
+      return combinedContent;
+    } catch (error) {
+      console.error('Advanced website content crawling error:', error);
+      return '';
+    }
   }
-}
   
-  // Modified streamFromAzureOpenAI function remains the same as in your original code
-  async function streamFromAzureOpenAI(
+   // Modify the streamFromAzureOpenAI function to use the enhanced scraping
+   async function streamFromAzureOpenAI(
     userMessage,
     messageElement,
     intelliBot
