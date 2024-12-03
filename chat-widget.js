@@ -44,6 +44,7 @@
     }
   }
 
+
   // Advanced Web Content Loader
   class WebContentLoader {
     constructor(url, maxTokens = 5000) {
@@ -54,71 +55,71 @@
       this.domainUrls = new Set();
       this.originHostname = new URL(url).hostname;
       this.originProtocol = new URL(url).protocol;
-      this.originPort = new URL(url).port;
+      this.originPort = new URL(url).port || '';
     }
   
-      // Method to extract all links from the current page
-      async discoverPageLinks() {
-        const linkSources = [
-          () => {
-            // Primary method: use document.links for broader compatibility
-            return Array.from(document.links)
-              .map(link => link.href)
-              .filter(href => href.trim() !== '');
-          },
-          () => {
-            // Fallback: query selector for all anchor tags
-            return Array.from(document.querySelectorAll('a[href]'))
-              .map(a => {
-                try {
-                  // Resolve relative URLs
-                  return new URL(a.getAttribute('href'), this.url).href;
-                } catch {
-                  return null;
-                }
-              })
-              .filter(href => href !== null);
-          }
-        ];
-    
-        let links = [];
-        for (const source of linkSources) {
-          links = source().filter(href => {
-            try {
-              const url = new URL(href);
-              
-              // More permissive URL matching for local development
-              const isSameOrigin = 
-                url.hostname === this.originHostname &&
-                url.protocol === this.originProtocol &&
-                url.port === this.originPort;
-    
-              return (
-                isSameOrigin &&
-                !this.visitedUrls.has(href) &&
-                !href.includes('#') &&
-                !href.includes('javascript:') &&
-                !href.endsWith('.pdf') &&
-                !href.endsWith('.jpg') &&
-                !href.endsWith('.png') &&
-                !href.endsWith('.gif')
-              );
-            } catch {
-              return false;
-            }
-          });
-    
-          if (links.length > 0) break;
+    // Method to extract all links from the current page
+    async discoverPageLinks(currentDocument) {
+      const linkSources = [
+        () => {
+          // Primary method: use document.links for broader compatibility
+          return Array.from(currentDocument.links)
+            .map(link => link.href)
+            .filter(href => href.trim() !== '');
+        },
+        () => {
+          // Fallback: query selector for all anchor tags
+          return Array.from(currentDocument.querySelectorAll('a[href]'))
+            .map(a => {
+              try {
+                // Resolve relative URLs
+                return new URL(a.getAttribute('href'), this.url).href;
+              } catch {
+                return null;
+              }
+            })
+            .filter(href => href !== null);
         }
-    
-        console.log(`🔍 WebCrawler Link Discovery:
-          - Total Unique Links Found: ${links.length}
-          - Links: ${links.join(', ')}`);
-    
-        return [...new Set(links)];
+      ];
+  
+      let links = [];
+      for (const source of linkSources) {
+        links = source().filter(href => {
+          try {
+            const url = new URL(href);
+            
+            // More permissive URL matching for local development
+            const isSameOrigin = 
+              url.hostname === this.originHostname &&
+              url.protocol === this.originProtocol &&
+              url.port === this.originPort;
+  
+            return (
+              isSameOrigin &&
+              !this.visitedUrls.has(href) &&
+              !href.includes('#') &&
+              !href.includes('javascript:') &&
+              !href.endsWith('.pdf') &&
+              !href.endsWith('.jpg') &&
+              !href.endsWith('.png') &&
+              !href.endsWith('.gif')
+            );
+          } catch {
+            return false;
+          }
+        });
+  
+        if (links.length > 0) break;
       }
   
-      async crawlWebsite(depth = 3, currentDepth = 0) {
+      console.log(`🔍 WebCrawler Link Discovery:
+        - Total Unique Links Found: ${links.length}
+        - Links: ${links.join(', ')}`);
+  
+      return [...new Set(links)];
+    }
+  
+      async crawlWebsite(depth = 3, currentDepth = 0, currentDocument = document) {
         console.log(`🌐 WebCrawler: Crawling ${this.url} (Depth: ${currentDepth})`);
     
         // Prevent infinite recursion and limit total pages
@@ -129,7 +130,7 @@
     
         try {
           // Extract current page content
-          const currentPageContent = await this.extractText();
+          const currentPageContent = await this.extractText(currentDocument);
           
           if (currentPageContent && currentPageContent.length > 200) {
             this.domainUrls.add({
@@ -143,7 +144,7 @@
           }
     
           // Discover links on the current page
-          const pageLinks = await this.discoverPageLinks();
+          const pageLinks = await this.discoverPageLinks(currentDocument);
     
           // Recursive crawling of links
           for (const link of pageLinks) {
@@ -165,14 +166,10 @@
                   iframe.onload = async () => {
                     // Switch iframe context
                     const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
-                    
-                    // Temporarily replace document methods
-                    const originalDocument = document;
-                    global.document = iframeDocument;
     
                     try {
                       // Load page content
-                      const pageContent = await this.extractText();
+                      const pageContent = await this.extractText(iframeDocument);
                       
                       if (pageContent && pageContent.length > 200) {
                         this.domainUrls.add({
@@ -181,13 +178,11 @@
                         });
                         
                         // Continue crawling recursively
-                        await this.crawlWebsite(depth, currentDepth + 1);
+                        await this.crawlWebsite(depth, currentDepth + 1, iframeDocument);
                       }
                     } catch (error) {
                       console.error(`❌ WebCrawler Error in iframe for ${link}:`, error);
                     } finally {
-                      // Restore original document
-                      global.document = originalDocument;
                       document.body.removeChild(iframe);
                       resolve();
                     }
@@ -208,16 +203,15 @@
           return Array.from(this.domainUrls);
         }
       }
-    
-
-      async extractText() {
+      
+      async extractText(currentDocument = document) {
         const extractionMethods = [
-          this.extractMainContentBySemantics.bind(this),
-          this.extractTextByElementTypes.bind(this),
-          this.extractTextByTreeWalker.bind(this),
-          this.extractEntireBodyText.bind(this)
+          () => this.extractMainContentBySemantics(currentDocument),
+          () => this.extractTextByElementTypes(currentDocument),
+          () => this.extractTextByTreeWalker(currentDocument),
+          () => this.extractEntireBodyText(currentDocument)
         ];
-    
+  
         let extractedContent = '';
         for (const extractor of extractionMethods) {
           extractedContent = await extractor();
@@ -229,84 +223,84 @@
             break;
           }
         }
-    
+  
         return this.preprocessText(extractedContent);
       }
     
       // New method: extract entire body text as a last resort
-      async extractEntireBodyText() {
-        return document.body.innerText || document.body.textContent || '';
+      async extractEntireBodyText(currentDocument) {
+        return currentDocument.body.innerText || currentDocument.body.textContent || '';
       }
 
-    async extractMainContentBySemantics() {
-      const contentSelectors = [
-        'main', 'article', '.content', '#content', 
-        '.main-content', 'body'
-      ];
-
-      for (const selector of contentSelectors) {
-        const contentElement = document.querySelector(selector);
-        if (contentElement) {
-          return contentElement.innerText || contentElement.textContent;
-        }
-      }
-
-      return '';
-    }
-
-    async extractTextByElementTypes() {
-      const importantElements = [
-        'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
-        'article', 'section', 'div'
-      ];
-
-      const textParts = [];
-      importantElements.forEach(tag => {
-        const elements = document.getElementsByTagName(tag);
-        Array.from(elements).forEach(el => {
-          const text = el.innerText || el.textContent;
-          if (text.trim().length > 10) {
-            textParts.push(text);
+      async extractMainContentBySemantics(currentDocument) {
+        const contentSelectors = [
+          'main', 'article', '.content', '#content', 
+          '.main-content', 'body'
+        ];
+  
+        for (const selector of contentSelectors) {
+          const contentElement = currentDocument.querySelector(selector);
+          if (contentElement) {
+            return contentElement.innerText || contentElement.textContent;
           }
-        });
-      });
-
-      return textParts.join(' ');
-    }
-
-    async extractTextByTreeWalker() {
-      const walker = document.createTreeWalker(
-        document.body, 
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
-      );
-
-      let text = '';
-      while(walker.nextNode()) {
-        const nodeText = walker.currentNode.textContent.trim();
-        if (nodeText.length > 10) {
-          text += nodeText + ' ';
         }
+  
+        return '';
       }
-
-      return text;
+  
+      async extractTextByElementTypes(currentDocument) {
+        const importantElements = [
+          'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+          'article', 'section', 'div'
+        ];
+  
+        const textParts = [];
+        importantElements.forEach(tag => {
+          const elements = currentDocument.getElementsByTagName(tag);
+          Array.from(elements).forEach(el => {
+            const text = el.innerText || el.textContent;
+            if (text.trim().length > 10) {
+              textParts.push(text);
+            }
+          });
+        });
+  
+        return textParts.join(' ');
+      }
+  
+      async extractTextByTreeWalker(currentDocument) {
+        const walker = currentDocument.createTreeWalker(
+          currentDocument.body, 
+          NodeFilter.SHOW_TEXT,
+          null,
+          false
+        );
+  
+        let text = '';
+        while(walker.nextNode()) {
+          const nodeText = walker.currentNode.textContent.trim();
+          if (nodeText.length > 10) {
+            text += nodeText + ' ';
+          }
+        }
+  
+        return text;
+      }
+  
+      preprocessText(text) {
+        return text
+          .replace(/\s+/g, ' ')
+          .replace(/[^\w\s.,!?]/g, '')
+          .trim()
+          .substring(0, this.maxTokens);
+      }
+  
+      async processContentEmbedding() {
+        const extractedText = await this.extractText();
+        const textChunks = this.embeddingUtility.preprocessAndChunk(extractedText);
+        return await this.embeddingUtility.generateEmbeddings(textChunks);
+      }
     }
-
-    preprocessText(text) {
-      return text
-        .replace(/\s+/g, ' ')
-        .replace(/[^\w\s.,!?]/g, '')
-        .trim()
-        .substring(0, this.maxTokens);
-    }
-
-    async processContentEmbedding() {
-      const extractedText = await this.extractText();
-      const textChunks = this.embeddingUtility.preprocessAndChunk(extractedText);
-      return await this.embeddingUtility.generateEmbeddings(textChunks);
-    }
-  }
 
   // Existing code from the original script continues here...
   const msalConfig = {
