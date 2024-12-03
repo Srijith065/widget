@@ -119,14 +119,14 @@
       return [...new Set(links)];
     }
   
-      async crawlWebsite(depth = 3, currentDepth = 0, currentDocument = document) {
+      async crawlWebsite(depth = 10, currentDepth = 0, currentDocument = document) {
         console.log(`🌐 WebCrawler: Crawling ${this.url} (Depth: ${currentDepth})`);
     
         // Prevent infinite recursion and limit total pages
-        if (currentDepth >= depth || this.visitedUrls.size >= 20) {
+        if (currentDepth >= depth || this.visitedUrls.size >= 100) {
           console.log('🛑 WebCrawler: Reached maximum crawl depth or page limit');
           return Array.from(this.domainUrls);
-        }
+        }        
     
         try {
           // Extract current page content
