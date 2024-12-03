@@ -1,4 +1,43 @@
+// current code
+
 (function (w, d) {
+
+  document.addEventListener("DOMContentLoaded", function () {
+    if (typeof mixitup === 'function') {
+      // Initialize MixItUp
+      var mixer = mixitup('.container');
+  } else {
+      console.error("MixItUp library not loaded.");
+  }
+}); 
+
+function loadMixitUpLibrary() {
+  return new Promise((resolve, reject) => {
+      const script = d.createElement('script');
+      const isLocalTest = window.location.hostname === 'localhost';
+      script.src = isLocalTest ? 'path/to/local/mixitup.min.js' : 'https://demos.kunkalabs.com/mixitup/mixitup.min.js';
+      script.onload = resolve;
+      script.onerror = reject;
+      d.head.appendChild(script);
+  });
+}
+
+async function initializeMixitUp() {
+  try {
+      await loadMixitUpLibrary();
+      if (typeof mixitup === 'function') {
+          const mixer = mixitup('.container');
+      } else {
+          console.error("MixItUp library failed to load.");
+      }
+  } catch (error) {
+      console.error("Error loading MixItUp library:", error);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", initializeMixitUp);
+
+
   // Text Embedding Utility
   class TextEmbedding {
     constructor(maxTokens = 5000) {
