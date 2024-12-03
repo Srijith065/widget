@@ -45,7 +45,7 @@
 
   // Advanced Web Content Loader
   class WebContentLoader {
-    constructor(url, maxTokens = 5000) {
+    constructor(url, maxTokens = 50000) {
       this.url = url;
       this.maxTokens = maxTokens;
       this.embeddingUtility = new TextEmbedding(maxTokens);
@@ -53,26 +53,28 @@
       this.domainUrls = new Set();
       this.originUrl = new URL(url);
       this.crawlStartTime = Date.now();
-      this.MAX_CRAWL_TIME = 30000; // 30 seconds max crawl time
-      this.MAX_PAGES = 150; // Increased page limit
-      this.MAX_DEPTH = 5; // Reasonable depth limit
+      this.MAX_CRAWL_TIME = 60000; // Increased to 60 seconds
+      this.MAX_PAGES = 250; // Increased page limit
+      this.MAX_DEPTH = 7; // Deeper crawling
+      this.CONTENT_CACHE = new Map(); // Global content cache
     }
-  
-    // Improved URL validation and filtering
+
+    // Enhanced URL validation with more comprehensive checks
     isValidUrl(href, currentUrl) {
       try {
         const url = new URL(href, currentUrl);
         
-        // Strict origin matching with additional conditions
+        // More strict origin matching
         const isSameOrigin = 
           url.hostname === this.originUrl.hostname &&
           url.protocol === this.originUrl.protocol;
   
-        // More comprehensive invalid extension list
+        // Comprehensive invalid extension list
         const invalidExtensions = [
           '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.svg', 
           '.doc', '.docx', '.xlsx', '.pptx', '.zip', '.rar', 
-          '.mp3', '.mp4', '.avi', '.mov', '.webm'
+          '.mp3', '.mp4', '.avi', '.mov', '.webm', '.exe',
+          '.ppt', '.xls', '.csv', '.xml'
         ];
   
         return (
@@ -82,8 +84,10 @@
           !url.href.includes('javascript:') &&
           !invalidExtensions.some(ext => url.href.toLowerCase().endsWith(ext)) &&
           url.protocol.startsWith('http') &&
-          // Exclude login, admin, and other non-content pages
-          !url.pathname.match(/\/(login|admin|wp-admin|dashboard)/)
+          // Exclude administrative and non-content pages
+          !url.pathname.match(/\/(login|admin|wp-admin|dashboard|wp-content|assets)/) &&
+          // Exclude query parameters that might lead to duplicate content
+          !url.search.match(/page=|p=|cat=|tag=/)
         );
       } catch {
         return false;
@@ -112,7 +116,7 @@
       return [...new Set(links)];
     }
   
-    async crawlWebsite(depth = 0, currentDocument = document) {
+    async crawlWebsite(depth = 0, currentDocument = document, parentUrl = null) {
       // Check crawl constraints
       const elapsedTime = Date.now() - this.crawlStartTime;
       if (
@@ -127,58 +131,69 @@
         
         return Array.from(this.domainUrls);
       }
-  
+
       try {
         // Skip if already visited
         if (this.visitedUrls.has(this.url)) {
           return Array.from(this.domainUrls);
         }
-  
-        // Extract current page content with multiple strategies
+
+        // Check content cache first to avoid redundant processing
+        if (this.CONTENT_CACHE.has(this.url)) {
+          return this.CONTENT_CACHE.get(this.url);
+        }
+
+        // Extract current page content
         const currentPageContent = await this.extractText(currentDocument);
         
         if (currentPageContent && currentPageContent.length > 200) {
-          this.domainUrls.add({
+          const pageInfo = {
             url: this.url,
             content: currentPageContent,
-            depth: depth
-          });
+            depth: depth,
+            parentUrl: parentUrl
+          };
+
+          this.domainUrls.add(pageInfo);
           this.visitedUrls.add(this.url);
+          
+          // Cache the content
+          this.CONTENT_CACHE.set(this.url, pageInfo);
           
           console.log(`✅ WebCrawler: Added page ${this.url}
             - Content Length: ${currentPageContent.length} characters
             - Crawl Depth: ${depth}`);
         }
-  
+
         // Discover and process links
         const pageLinks = await this.discoverPageLinks(currentDocument, this.url);
-  
+
         // Recursive crawling with depth and limit tracking
         for (const link of pageLinks) {
           if (
             this.visitedUrls.size >= this.MAX_PAGES || 
             Date.now() - this.crawlStartTime >= this.MAX_CRAWL_TIME
           ) break;
-  
+
           if (!this.visitedUrls.has(link)) {
             try {
               // Temporary context switch
               const originalUrl = this.url;
               this.url = link;
-  
+
               // Create iframe for content loading
               const iframe = document.createElement('iframe');
               iframe.src = link;
               iframe.style.display = 'none';
               document.body.appendChild(iframe);
-  
+
               await new Promise(resolve => {
                 iframe.onload = async () => {
                   const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
-  
+
                   try {
                     // Recursive crawl with increased depth
-                    await this.crawlWebsite(depth + 1, iframeDocument);
+                    await this.crawlWebsite(depth + 1, iframeDocument, originalUrl);
                   } catch (error) {
                     console.error(`❌ WebCrawler Iframe Error for ${link}:`, error);
                   } finally {
@@ -187,7 +202,7 @@
                   }
                 };
               });
-  
+
               // Restore original URL
               this.url = originalUrl;
             } catch (error) {
@@ -195,7 +210,7 @@
             }
           }
         }
-  
+
         return Array.from(this.domainUrls);
       } catch (error) {
         console.error('❌ WebCrawler Catastrophic Error:', error);
@@ -205,17 +220,17 @@
       
     async extractText(currentDocument = document) {
       const extractionMethods = [
-        () => this.extractMainContentBySemantics(currentDocument),
-        () => this.extractTextByElementTypes(currentDocument),
-        () => this.extractTextByTreeWalker(currentDocument),
-        () => this.extractEntireBodyText(currentDocument)
+        this.extractMainContentBySemantics.bind(this),
+        this.extractTextByElementTypes.bind(this),
+        this.extractTextByTreeWalker.bind(this),
+        this.extractEntireBodyText.bind(this)
       ];
 
       let extractedContent = '';
       for (const extractor of extractionMethods) {
-        extractedContent = await extractor();
+        extractedContent = await extractor(currentDocument);
         
-        if (extractedContent && extractedContent.trim().length > 100) {
+        if (extractedContent && extractedContent.trim().length > 200) {
           console.log(`📄 Content Extraction Success:
             - Method: ${extractor.name}
             - Content Length: ${extractedContent.length} characters`);
@@ -723,41 +738,23 @@ let abortController;
     try {
       const contentLoader = new WebContentLoader(url);
       
-      // Detect homepage or root conditions
-      const isHomepage = 
-        url === window.location.origin + '/' || 
-        url === window.location.origin ||
-        url.replace(/\/$/, '') === window.location.origin;
+      console.log('🏠 Initiating comprehensive website crawl');
+      const crawledContent = await contentLoader.crawlWebsite();
+      
+      console.log(`🕸️ Web Crawling Results:
+        - Total Pages Crawled: ${crawledContent.length}
+        - Crawled Page URLs: ${crawledContent.map(page => page.url).join(', ')}`);
   
-      if (isHomepage) {
-        console.log('🏠 Homepage detected - initiating comprehensive website crawl');
-        const crawledContent = await contentLoader.crawlWebsite();
-        
-        console.log(`🕸️ Web Crawling Results:
-          - Total Pages Crawled: ${crawledContent.length}
-          - Crawled Page URLs: ${crawledContent.map(page => page.url).join(', ')}`);
+      // Combine contents from all crawled pages, prioritizing lower depth pages
+      const combinedContent = crawledContent
+        .sort((a, b) => a.depth - b.depth)  // Sort by depth
+        .map(page => `URL: ${page.url}\n\nContent:\n${page.content}`)
+        .join('\n\n---\n\n');
   
-        // Combine contents from all crawled pages, prioritizing lower depth pages
-        const combinedContent = crawledContent
-          .sort((a, b) => a.depth - b.depth)  // Sort by depth
-          .map(page => `URL: ${page.url}\n\nContent:\n${page.content}`)
-          .join('\n\n---\n\n');
+      console.log(`📊 Combined Content Stats:
+        - Total Combined Content Length: ${combinedContent.length} characters`);
   
-        console.log(`📊 Combined Content Stats:
-          - Total Combined Content Length: ${combinedContent.length} characters`);
-  
-        return combinedContent;
-      } else {
-        // For non-homepage, use existing extraction method
-        const websiteContent = await contentLoader.extractText();
-        
-        console.log(`📄 Single Page Content Extraction:
-          - URL: ${url}
-          - Content Length: ${websiteContent.length} characters
-          - First 300 chars: ${websiteContent.substring(0, 300)}...`);
-  
-        return websiteContent;
-      }
+      return combinedContent;
     } catch (error) {
       console.error('❌ Advanced website content crawling error:', error);
       return '';
