@@ -55,9 +55,9 @@
       this.domainUrls = new Set();
       this.originUrl = new URL(url);
       this.crawlStartTime = Date.now();
-      this.MAX_CRAWL_TIME = 15000; // 15 seconds max crawl time
-      this.MAX_PAGES = 100; // Limit total pages
-      this.MAX_DEPTH = 100; // Limit crawl depth
+      this.MAX_CRAWL_TIME = 30000; // 30 seconds max crawl time
+      this.MAX_PAGES = 150; // Increased page limit
+      this.MAX_DEPTH = 5; // Reasonable depth limit
     }
   
     // Improved URL validation and filtering
@@ -65,15 +65,16 @@
       try {
         const url = new URL(href, currentUrl);
         
-        // Strict origin matching
+        // Strict origin matching with additional conditions
         const isSameOrigin = 
           url.hostname === this.originUrl.hostname &&
           url.protocol === this.originUrl.protocol;
   
-        // Exclude non-HTML resources and problematic URLs
+        // More comprehensive invalid extension list
         const invalidExtensions = [
-          '.pdf', '.jpg', '.jpeg', '.png', '.gif', 
-          '.doc', '.docx', '.xlsx', '.pptx', '.zip'
+          '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.svg', 
+          '.doc', '.docx', '.xlsx', '.pptx', '.zip', '.rar', 
+          '.mp3', '.mp4', '.avi', '.mov', '.webm'
         ];
   
         return (
@@ -82,7 +83,9 @@
           !url.href.includes('#') &&
           !url.href.includes('javascript:') &&
           !invalidExtensions.some(ext => url.href.toLowerCase().endsWith(ext)) &&
-          url.protocol.startsWith('http')
+          url.protocol.startsWith('http') &&
+          // Exclude login, admin, and other non-content pages
+          !url.pathname.match(/\/(login|admin|wp-admin|dashboard)/)
         );
       } catch {
         return false;
@@ -133,18 +136,20 @@
           return Array.from(this.domainUrls);
         }
   
-        // Extract current page content
+        // Extract current page content with multiple strategies
         const currentPageContent = await this.extractText(currentDocument);
         
         if (currentPageContent && currentPageContent.length > 200) {
           this.domainUrls.add({
             url: this.url,
-            content: currentPageContent
+            content: currentPageContent,
+            depth: depth
           });
           this.visitedUrls.add(this.url);
           
           console.log(`✅ WebCrawler: Added page ${this.url}
-            - Content Length: ${currentPageContent.length} characters`);
+            - Content Length: ${currentPageContent.length} characters
+            - Crawl Depth: ${depth}`);
         }
   
         // Discover and process links
@@ -200,44 +205,68 @@
       }
     }
       
-      async extractText(currentDocument = document) {
-        const extractionMethods = [
-          () => this.extractMainContentBySemantics(currentDocument),
-          () => this.extractTextByElementTypes(currentDocument),
-          () => this.extractTextByTreeWalker(currentDocument),
-          () => this.extractEntireBodyText(currentDocument)
-        ];
-  
-        let extractedContent = '';
-        for (const extractor of extractionMethods) {
-          extractedContent = await extractor();
-          
-          if (extractedContent && extractedContent.trim().length > 100) {
-            console.log(`📄 Content Extraction Success:
-              - Method: ${extractor.name}
-              - Content Length: ${extractedContent.length} characters`);
-            break;
-          }
+    async extractText(currentDocument = document) {
+      const extractionMethods = [
+        () => this.extractMainContentBySemantics(currentDocument),
+        () => this.extractTextByElementTypes(currentDocument),
+        () => this.extractTextByTreeWalker(currentDocument),
+        () => this.extractEntireBodyText(currentDocument)
+      ];
+
+      let extractedContent = '';
+      for (const extractor of extractionMethods) {
+        extractedContent = await extractor();
+        
+        if (extractedContent && extractedContent.trim().length > 100) {
+          console.log(`📄 Content Extraction Success:
+            - Method: ${extractor.name}
+            - Content Length: ${extractedContent.length} characters`);
+          break;
         }
-  
-        return this.preprocessText(extractedContent);
       }
+
+      return this.preprocessText(extractedContent);
+    }
     
       // New method: extract entire body text as a last resort
       async extractEntireBodyText(currentDocument) {
+        // More selective text extraction
+        const relevantSelectors = [
+          'body', 'main', 'article', '#content', 
+          '.content', '.main-content', '#main-content'
+        ];
+  
+        for (const selector of relevantSelectors) {
+          const contentElement = currentDocument.querySelector(selector);
+          if (contentElement) {
+            // Remove script, style, and other non-content elements
+            const clonedContent = contentElement.cloneNode(true);
+            const elementsToRemove = clonedContent.querySelectorAll('script, style, nav, header, footer');
+            elementsToRemove.forEach(el => el.remove());
+  
+            return clonedContent.innerText || clonedContent.textContent || '';
+          }
+        }
+  
         return currentDocument.body.innerText || currentDocument.body.textContent || '';
       }
 
       async extractMainContentBySemantics(currentDocument) {
         const contentSelectors = [
           'main', 'article', '.content', '#content', 
-          '.main-content', 'body'
+          '.main-content', '.page-content', '#page-content',
+          '.entry-content', '#entry-content'
         ];
   
         for (const selector of contentSelectors) {
           const contentElement = currentDocument.querySelector(selector);
           if (contentElement) {
-            return contentElement.innerText || contentElement.textContent;
+            // Remove unnecessary nested elements
+            const clonedContent = contentElement.cloneNode(true);
+            const unnecessaryElements = clonedContent.querySelectorAll('nav, header, footer, aside, .sidebar, .comment');
+            unnecessaryElements.forEach(el => el.remove());
+  
+            return clonedContent.innerText || clonedContent.textContent;
           }
         }
   
@@ -255,7 +284,10 @@
           const elements = currentDocument.getElementsByTagName(tag);
           Array.from(elements).forEach(el => {
             const text = el.innerText || el.textContent;
-            if (text.trim().length > 10) {
+            // More strict filtering
+            if (text.trim().length > 30 && 
+                !text.toLowerCase().includes('navigation') && 
+                !text.toLowerCase().includes('menu')) {
               textParts.push(text);
             }
           });
@@ -275,7 +307,10 @@
         let text = '';
         while(walker.nextNode()) {
           const nodeText = walker.currentNode.textContent.trim();
-          if (nodeText.length > 10) {
+          // More selective text gathering
+          if (nodeText.length > 30 && 
+              !nodeText.toLowerCase().includes('menu') && 
+              !nodeText.toLowerCase().includes('navigation')) {
             text += nodeText + ' ';
           }
         }
@@ -690,10 +725,11 @@ let abortController;
     try {
       const contentLoader = new WebContentLoader(url);
       
-      // Detect homepage conditions
+      // Detect homepage or root conditions
       const isHomepage = 
         url === window.location.origin + '/' || 
-        url === window.location.origin;
+        url === window.location.origin ||
+        url.replace(/\/$/, '') === window.location.origin;
   
       if (isHomepage) {
         console.log('🏠 Homepage detected - initiating comprehensive website crawl');
@@ -703,8 +739,9 @@ let abortController;
           - Total Pages Crawled: ${crawledContent.length}
           - Crawled Page URLs: ${crawledContent.map(page => page.url).join(', ')}`);
   
-        // Combine contents from all crawled pages
+        // Combine contents from all crawled pages, prioritizing lower depth pages
         const combinedContent = crawledContent
+          .sort((a, b) => a.depth - b.depth)  // Sort by depth
           .map(page => `URL: ${page.url}\n\nContent:\n${page.content}`)
           .join('\n\n---\n\n');
   
