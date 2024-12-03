@@ -48,14 +48,16 @@ class WebContentLoader {
   constructor(url, maxTokens = 5000) {
     this.url = url;
     this.maxTokens = maxTokens;
+    this.embeddingUtility = new TextEmbedding(maxTokens);
   }
 
   extractText() {
-    // Content extraction strategies
+    // Enhanced content extraction strategies
     const contentExtractors = [
       this.extractMainContentBySemantics.bind(this),
       this.extractTextByElementTypes.bind(this),
-      this.extractTextByTreeWalker.bind(this)
+      this.extractTextByTreeWalker.bind(this),
+      this.extractContentUsingAdvancedSelectors.bind(this)
     ];
 
     let extractedContent = '';
@@ -70,13 +72,22 @@ class WebContentLoader {
   extractMainContentBySemantics() {
     const contentSelectors = [
       'main', 'article', '.content', '#content', 
-      '.main-content', 'body'
+      '.main-content', '.article-body', '.post-content',
+      '.entry-content', 'body', 
+      'div[class*="content"]', 'div[id*="content"]'
     ];
 
     for (const selector of contentSelectors) {
-      const contentElement = document.querySelector(selector);
-      if (contentElement) {
-        return contentElement.innerText || contentElement.textContent;
+      const contentElements = document.querySelectorAll(selector);
+      if (contentElements.length > 0) {
+        const combinedText = Array.from(contentElements)
+          .map(el => el.innerText || el.textContent)
+          .join(' ')
+          .trim();
+        
+        if (combinedText.length > 200) {
+          return combinedText;
+        }
       }
     }
 
@@ -86,7 +97,8 @@ class WebContentLoader {
   extractTextByElementTypes() {
     const importantElements = [
       'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
-      'article', 'section', 'div'
+      'article', 'section', 'div', 'span', 
+      '[class*="text"]', '[class*="paragraph"]'
     ];
 
     const textParts = [];
@@ -94,7 +106,7 @@ class WebContentLoader {
       const elements = document.getElementsByTagName(tag);
       Array.from(elements).forEach(el => {
         const text = el.innerText || el.textContent;
-        if (text.trim().length > 10) {
+        if (text.trim().length > 10 && !this.isNavigationOrRepetitiveText(text)) {
           textParts.push(text);
         }
       });
@@ -112,30 +124,71 @@ class WebContentLoader {
     );
 
     let text = '';
+    const filteredTexts = [];
     while(walker.nextNode()) {
       const nodeText = walker.currentNode.textContent.trim();
-      if (nodeText.length > 10) {
-        text += nodeText + ' ';
+      if (nodeText.length > 10 && !this.isNavigationOrRepetitiveText(nodeText)) {
+        filteredTexts.push(nodeText);
       }
     }
 
-    return text;
+    return filteredTexts.join(' ');
+  }
+
+  extractContentUsingAdvancedSelectors() {
+    const advancedSelectors = [
+      '[data-content]', 
+      '[data-text]', 
+      '.page-content', 
+      '.blog-content', 
+      '.article-body'
+    ];
+
+    for (const selector of advancedSelectors) {
+      const contentElements = document.querySelectorAll(selector);
+      if (contentElements.length > 0) {
+        const combinedText = Array.from(contentElements)
+          .map(el => el.innerText || el.textContent)
+          .join(' ')
+          .trim();
+        
+        if (combinedText.length > 200) {
+          return combinedText;
+        }
+      }
+    }
+
+    return '';
+  }
+
+  // Helper method to filter out navigation or repetitive text
+  isNavigationOrRepetitiveText(text) {
+    const navigationPatterns = [
+      /\b(menu|navigation|footer|copyright|privacy|terms)\b/i,
+      /\b(contact|about|home|login|signup)\b/i,
+      /\d{4} all rights reserved/i,
+      /powered by/i
+    ];
+
+    return navigationPatterns.some(pattern => pattern.test(text));
   }
 
   preprocessText(text) {
+    // Enhanced text preprocessing
     return text
-      .replace(/\s+/g, ' ')
-      .replace(/[^\w\s.,!?]/g, '')
+      .replace(/\s+/g, ' ')           // Normalize whitespace
+      .replace(/[^\w\s.,!?:-]/g, '')  // Remove special characters while keeping some punctuation
+      .replace(/\b(https?:\/\/\S+)/g, '')  // Remove URLs
       .trim()
-      .substring(0, this.maxTokens);
+      .substring(0, this.maxTokens);  // Limit to max tokens
   }
 
-    async processContentEmbedding() {
-      const extractedText = await this.extractText();
-      const textChunks = this.embeddingUtility.preprocessAndChunk(extractedText);
-      return await this.embeddingUtility.generateEmbeddings(textChunks);
-    }
+  async processContentEmbedding() {
+    const extractedText = this.extractText();
+    const textChunks = this.embeddingUtility.preprocessAndChunk(extractedText);
+    return await this.embeddingUtility.generateEmbeddings(textChunks);
   }
+}
 
   // Existing code from the original script continues here...
   const msalConfig = {
@@ -524,18 +577,46 @@ let abortController;
     return markdown;
   }
 
-  // Modified scrapeWebsiteContent function
+// Modify scrapeWebsiteContent to use fetch for cross-page content extraction
 async function scrapeWebsiteContent(url) {
   try {
-    const contentLoader = new WebContentLoader(url);
-    const websiteContent = contentLoader.extractText();
-    
-    console.log(`Web Content Extraction Debug:
-      - URL: ${url}
-      - Content Length: ${websiteContent.length} characters
-      - First 300 chars: ${websiteContent.substring(0, 300)}...`);
+    // First, try to fetch the page content directly
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
 
-    return websiteContent;
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const htmlContent = await response.text();
+
+    // Create a temporary DOM parser
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlContent, 'text/html');
+
+    // Temporarily replace the current document
+    const originalDocument = document;
+    Object.defineProperty(window, 'document', { value: doc, writable: true });
+
+    try {
+      const contentLoader = new WebContentLoader(url);
+      const websiteContent = contentLoader.extractText();
+      
+      console.log(`Web Content Extraction Debug:
+        - URL: ${url}
+        - Content Length: ${websiteContent.length} characters
+        - First 300 chars: ${websiteContent.substring(0, 300)}...`);
+
+      return websiteContent;
+    } finally {
+      // Restore the original document
+      Object.defineProperty(window, 'document', { value: originalDocument, writable: true });
+    }
   } catch (error) {
     console.error('Website content extraction error:', error);
     return '';
