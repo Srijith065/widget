@@ -37,13 +37,15 @@ jobs:
           path: release.zip
 
   deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    environment:
-      name: 'Production'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
-    
-    steps:
+      runs-on: ubuntu-latest
+      needs: build
+      environment:
+        name: 'Production'
+        url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+      permissions:
+        id-token: write #This is required for requesting the JWT
+
+      steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
@@ -52,11 +54,18 @@ jobs:
       - name: Unzip artifact for deployment
         run: unzip release.zip
       
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_A5C23BA71AC046D1AB402FBD5048B929 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_4F30F83A913449ED84A62F1FA1C85C13 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_5B807AFE9B5947199BDD8B0B6443546C }}
+
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'intellientwidget'
+          app-name: 'chatWidgetFin'
           slot-name: 'Production'
           package: .
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_0777EDD3BD4C4944A925F9749758A0A3 }}
+          
