@@ -4,28 +4,20 @@
   const widgetId = widgetOptions.widgetId;
   let validationResponse;
   let validatedLogo;
-  let personaData;
-  const fontFamily =
-    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  const secondaryColor = "#f0f2f5";
   console.log("widgetId", widgetId);
   console.log(" window.location.href", window.location.href);
  
-  async function persona() {
-    try {
-      const response = await fetch(
-        "https://intellientuat.azurewebsites.net/api/link-widget/intellibots",
-        {
-          method: "GET",
-        }
-      );
-      const data = await response.json();
-      personaData = data.response;
-      return data;
-    } catch {
-      console.log("error from persona getmethod");
-    }
-  }
+  const DEFAULT_THEME = {
+    greeting: "Hello! How can I help you today?",
+    avatarFile:
+      "https://delightful-beach-07c9da51e.5.azurestaticapps.net/widget-logo.png",
+    brandingColor: "#3B82F6",
+    primaryButtonColor: "#10B981",
+    primaryButtonTextColor: "#FFFFFF",
+    pageBackgroundColor: "#F3F4F6",
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  };
  
   function markdownToHtml(markdown) {
     // Convert **bold** to <strong>
@@ -46,30 +38,20 @@
   // Updated code - Intellient UAT
   let abortController = null;
   let conversationHistory = [];
-  async function streamFromAzureOpenAI(
-    userMessage,
-    messageElement,
-    intelliBot
-  ) {
+  async function streamFromAzureOpenAI(userMessage, messageElement, widgetId) {
     abortController = new AbortController();
     const { signal } = abortController;
-    console.log("intelliBot", intelliBot);
  
     console.log("userMessage", userMessage);
-    let filteredBot;
-    if (intelliBot) {
-      filteredBot = personaData.filter((name) => name.name === intelliBot);
-      console.log("filteredBot", filteredBot);
-    }
     conversationHistory.push({ role: "user", content: userMessage });
     try {
       const response = await fetch(
-        "https://intellientuat.azurewebsites.net/api/link-widget",
+        "https://intelli-widget-adminportal.azurewebsites.net/api/link-widget",
         {
           method: "POST",
           body: JSON.stringify({
             userMessage,
-            filteredBot,
+            widgetId,
             conversationHistory,
           }),
           signal,
@@ -155,8 +137,10 @@
   }
  
   async function valiadateWidget(widgetId) {
+    console.log("widgetId", widgetId);
+ 
     const response = await fetch(
-      "https://intellientuat.azurewebsites.net/api/link-widget/widget-validations",
+      "https://intelli-widget-adminportal.azurewebsites.net/api/link-widget/widget-validations",
       {
         method: "POST",
         body: JSON.stringify({
@@ -164,6 +148,7 @@
         }),
       }
     );
+ 
     const data = await response.json();
     validationResponse = data;
     return data;
@@ -171,16 +156,13 @@
  
   async function createChatWidget() {
     await valiadateWidget(widgetId);
-    validatedLogo = validationResponse.widgetIcon;
-    const currentDomain = window.location.hostname;
-    const allowedDomain = new URL(validationResponse.domain).hostname;
-    if (validationResponse.isPublished && currentDomain === allowedDomain) {
-      await persona();
-      console.log("personaData", personaData);
+    console.log("validationResponse", validationResponse);
  
-      const styles = `
+    validatedLogo = validationResponse.avatarFile;
+ 
+    const styles = `
       .intellient-widget-base {
-        font-family: ${fontFamily};
+        font-family: ${DEFAULT_THEME.fontFamily};
         z-index: 999999;
       }
    
@@ -190,8 +172,13 @@
         right: 20px;
         width: 60px;
         height: 60px;
-        background: white;
-        border-radius: 50%;
+        background: ${
+          validationResponse.brandingColor || DEFAULT_THEME.brandingColor
+        };
+ 
+    border-radius: ${
+      validationResponse.avatarShape === "circle" ? "50%" : "0%"
+    };
         cursor: pointer;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         display: flex;
@@ -229,7 +216,9 @@
    
       .intellient-chat-header {
         padding: 16px;
-        background: ${validationResponse.color};
+        background: ${
+          validationResponse.brandingColor || DEFAULT_THEME.brandingColor
+        };
         color: white;
         border-radius: 12px 12px 0 0;
         display: flex;
@@ -274,7 +263,9 @@
       .intellient-chat-header .intellient-chat-avatar {
         width: 40px;
         height: 40px;
-        border-radius: 50%;
+            border-radius: ${
+              validationResponse.avatarShape === "circle" ? "50%" : "0%"
+            };
         margin-right: 12px;
       }
    
@@ -296,7 +287,10 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
-        background: ${secondaryColor};
+        background: ${
+          validationResponse.pageBackgroundColor ||
+          DEFAULT_THEME.pageBackgroundColor
+        };
       }
    
       .intellient-chat-message {
@@ -322,14 +316,13 @@
       }
    
       .intellient-chat-message.received {
-        background: white;
+        background: rgb(236, 236, 236);
         align-self: flex-start;
         border-bottom-left-radius: 4px;
       }
    
       .intellient-chat-message.sent {
-        background: ${validationResponse.color};
-        color: white;
+        background: white;
         align-self: flex-end;
         border-bottom-right-radius: 4px;
       }
@@ -353,7 +346,10 @@
    
       .intellient-chat-input button {
         padding: 12px;
-        background: ${validationResponse.color};
+        background: ${
+          validationResponse.primaryButtonColor ||
+          DEFAULT_THEME.primaryButtonColor
+        };
         color: white;
         border: none;
         border-radius: 50%;
@@ -372,7 +368,10 @@
       .intellient-chat-input button svg {
         width: 20px;
         height: 20px;
-        fill: white;
+        fill: ${
+          validationResponse.primaryButtonTextColor ||
+          DEFAULT_THEME.primaryButtonTextColor
+        };
       }
           .ask-intellient-title {
       display: block;
@@ -399,7 +398,7 @@
         height: 8px;
         background: #90949c;
         border-radius: 50%;
-        animation: typing-animation 1.4s inintellientte ease-in-out;
+        animation: typing-animation 1.4s ease-in-out;
       }
  
       #name-dropdown {
@@ -452,23 +451,29 @@
         50% { transform: translateY(-5px); }
       }
     `;
-      const styleSheet = d.createElement("style");
-      styleSheet.textContent = styles;
-      d.head.appendChild(styleSheet);
+    const styleSheet = d.createElement("style");
+    styleSheet.textContent = styles;
+    d.head.appendChild(styleSheet);
  
-      // Create launcher
-      const launcher = d.createElement("div");
-      launcher.className = "intellient-widget-base intellient-chat-launcher";
-      launcher.innerHTML = `<img src="${validatedLogo}" alt="Chat">`;
+    // Create launcher
+    const launcher = d.createElement("div");
+    launcher.className = "intellient-widget-base intellient-chat-launcher";
+    launcher.innerHTML = `<img src="${
+      validatedLogo || DEFAULT_THEME.avatarFile
+    }" alt="Chat">`;
  
-      // Create chat container
-      const chatContainer = d.createElement("div");
-      chatContainer.className =
-        "intellient-widget-base intellient-chat-container";
-      chatContainer.innerHTML = `
+    // Create chat container
+    const chatContainer = d.createElement("div");
+    chatContainer.className =
+      "intellient-widget-base intellient-chat-container";
+    chatContainer.innerHTML = `
         <div class="intellient-chat-header">
-          <img src="${validatedLogo}" alt="Assistant" class="intellient-chat-avatar">
-             <label class="ask-intellient-title">Ask Intellient</label>
+          <img src="${
+            validatedLogo || DEFAULT_THEME.avatarFile
+          }" alt="Assistant" class="intellient-chat-avatar">
+             <label class="ask-intellient-title">${
+               validationResponse.botName
+             }</label>
           <div class="intellient-chat-close">
             <svg viewBox="0 0 24 24">
               <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
@@ -477,9 +482,11 @@
         </div>
         <div class="intellient-chat-messages" id="intellientChatMessages">
           <div class="intellient-chat-message received">
-            <img src="${validatedLogo}" alt="Assistant" class="intellient-chat-avatar">
+            <img src="${
+              validatedLogo || DEFAULT_THEME.avatarFile
+            }" alt="Assistant" class="intellient-chat-avatar">
             <div class="intellient-message-content">${
-              validationResponse.welcomemessage
+              validationResponse.greeting || DEFAULT_THEME.greeting
             }</div>
             <div class="intellient-timestamp">${new Date().toLocaleTimeString(
               [],
@@ -514,162 +521,154 @@
         </div>
       `;
  
-      // Add elements to page
-      d.body.appendChild(launcher);
-      d.body.appendChild(chatContainer);
+    // Add elements to page
+    d.body.appendChild(launcher);
+    d.body.appendChild(chatContainer);
  
-      // Add event listeners
-      launcher.addEventListener("click", () => {
-        chatContainer.classList.add("visible");
-        launcher.style.display = "none";
-        const input = d.getElementById("intellientChatInput");
-        if (input) input.focus();
-      });
+    // Add event listeners
+    launcher.addEventListener("click", () => {
+      chatContainer.classList.add("visible");
+      launcher.style.display = "none";
+      const input = d.getElementById("intellientChatInput");
+      if (input) input.focus();
+    });
  
-      const closeButton = chatContainer.querySelector(".intellient-chat-close");
-      closeButton.addEventListener("click", () => {
-        chatContainer.classList.remove("visible");
-        launcher.style.display = "flex";
-      });
+    const closeButton = chatContainer.querySelector(".intellient-chat-close");
+    closeButton.addEventListener("click", () => {
+      chatContainer.classList.remove("visible");
+      launcher.style.display = "flex";
+    });
  
-      // Setup message handling
-      const messageInput = d.getElementById("intellientChatInput");
-      const nameDropdown = document.getElementById("name-dropdown");
-      const sendButton = d.getElementById("intellientChatSend");
-      const stopButton = d.getElementById("intellientChatStop");
-      stopButton.style.display = "none";
+    // Setup message handling
+    const messageInput = d.getElementById("intellientChatInput");
+    const nameDropdown = document.getElementById("name-dropdown");
+    const sendButton = d.getElementById("intellientChatSend");
+    const stopButton = d.getElementById("intellientChatStop");
+    stopButton.style.display = "none";
  
-      function startVoiceRecognition() {
-        if (!("webkitSpeechRecognition" in window)) {
-          alert("Your browser does not support voice recognition.");
-          return;
-        }
-        const recognition = new webkitSpeechRecognition();
-        recognition.lang = "en-US"; // Set language
-        recognition.interimResults = false; // Don't show interim results
-        recognition.maxAlternatives = 1; // Limit to one result
- 
-        // Voice recognition event handlers
-        recognition.onstart = () => {
-          showMicIcon();
-          console.log("Voice recognition started...");
-        };
- 
-        recognition.onresult = (event) => {
-          const transcript = event.results[0][0].transcript;
-          document.getElementById("intellientChatInput").value = transcript;
-        };
- 
-        recognition.onerror = (event) => {
-          console.error("Voice recognition error:", event.error);
-        };
- 
-        recognition.onend = () => {
-          sendMessage();
-          resetSendButton();
-          console.log("Voice recognition ended.");
-        };
- 
-        recognition.start();
+    function startVoiceRecognition() {
+      if (!("webkitSpeechRecognition" in window)) {
+        alert("Your browser does not support voice recognition.");
+        return;
       }
+      const recognition = new webkitSpeechRecognition();
+      recognition.lang = "en-US"; // Set language
+      recognition.interimResults = false; // Don't show interim results
+      recognition.maxAlternatives = 1; // Limit to one result
  
-      // Function to temporarily replace the Send button with a mic icon
-      function showMicIcon() {
-        sendButton.innerHTML = `
+      // Voice recognition event handlers
+      recognition.onstart = () => {
+        showMicIcon();
+        console.log("Voice recognition started...");
+      };
+ 
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById("intellientChatInput").value = transcript;
+      };
+ 
+      recognition.onerror = (event) => {
+        console.error("Voice recognition error:", event.error);
+      };
+ 
+      recognition.onend = () => {
+        sendMessage();
+        resetSendButton();
+        console.log("Voice recognition ended.");
+      };
+ 
+      recognition.start();
+    }
+ 
+    // Function to temporarily replace the Send button with a mic icon
+    function showMicIcon() {
+      sendButton.innerHTML = `
       <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
         <path d="M12 15c1.66 0 3-1.34 3-3V6a3 3 0 0 0-6 0v6c0 1.66 1.34 3 3 3zm4.3-3c0 2.38-1.88 4.3-4.3 4.3S7.7 14.38 7.7 12H6.1c0 3.15 2.41 5.75 5.5 6.3v3h1.8v-3c3.09-.55 5.5-3.15 5.5-6.3h-1.6z" />
       </svg>`;
-      }
+    }
  
-      // Function to reset the Send button to its original state
-      function resetSendButton() {
-        sendButton.innerHTML = `
+    // Function to reset the Send button to its original state
+    function resetSendButton() {
+      sendButton.innerHTML = `
       <svg viewBox="0 0 24 24">
         <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
       </svg>`;
-      }
-      sendButton.onmousedown = sendButton.ontouchstart = () => {
-        longPressTimer = setTimeout(() => {
-          startVoiceRecognition();
-        }, 800); // Long press duration (800ms)
-      };
- 
-      sendButton.onmouseup = sendButton.ontouchend = () => {
-        clearTimeout(longPressTimer);
-        // resetSendButton();
-      };
- 
-      async function sendMessage() {
-        console.log("enetered");
- 
-        let intellibotName = "";
-        const tagContainer = document.getElementById("tag-container");
-        const tags = tagContainer.getElementsByClassName("tag");
-        if (tags.length !== 0) {
-          intellibotName = tags[0].textContent.slice(1);
-        }
- 
-        const message = messageInput.value.trim();
-        console.log("messages", message);
-        console.log("intellibotName", intellibotName);
- 
-        if (message) {
-          sendButton.style.display = "none";
-          stopButton.style.display = "flex";
-          messageInput.disabled = true;
-          sendButton.disabled = true;
- 
-          // Add user message
-          addMessage(message, true);
-          messageInput.value = "";
- 
-          // Add assistant message
-          const assistantMessage = addMessage("", false);
-          console.log("assistantMessage", assistantMessage);
- 
-          await streamFromAzureOpenAI(
-            message,
-            assistantMessage,
-            validationResponse.intellibot
-          );
- 
-          messageInput.disabled = false;
-          sendButton.disabled = false;
-          sendButton.style.display = "flex";
-          stopButton.style.display = "none";
-          messageInput.focus();
-        }
-      }
- 
-      sendButton.addEventListener("click", sendMessage);
-      messageInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage();
-        }
-      });
- 
-      // Hide dropdown when clicking outside
-      document.addEventListener("click", (event) => {
-        if (
-          !nameDropdown.contains(event.target) &&
-          event.target !== messageInput
-        ) {
-          nameDropdown.style.display = "none"; // Hide dropdown
-        }
-      });
- 
-      stopButton.addEventListener("click", () => {
-        if (abortController) {
-          abortController.abort(); // Abort the ongoing fetch request
-          stopButton.style.display = "none"; // Hide the stop button after stopping the stream
-          console.log("Streaming process stopped.");
-        }
-      });
-    } else {
-      console.log("Unauthorized domain or widget not published");
-      return;
     }
+    sendButton.onmousedown = sendButton.ontouchstart = () => {
+      longPressTimer = setTimeout(() => {
+        startVoiceRecognition();
+      }, 800); // Long press duration (800ms)
+    };
+ 
+    sendButton.onmouseup = sendButton.ontouchend = () => {
+      clearTimeout(longPressTimer);
+      // resetSendButton();
+    };
+ 
+    async function sendMessage() {
+      console.log("enetered");
+ 
+      let intellibotName = "";
+      const tagContainer = document.getElementById("tag-container");
+      const tags = tagContainer.getElementsByClassName("tag");
+      if (tags.length !== 0) {
+        intellibotName = tags[0].textContent.slice(1);
+      }
+ 
+      const message = messageInput.value.trim();
+      console.log("messages", message);
+      console.log("intellibotName", intellibotName);
+ 
+      if (message) {
+        sendButton.style.display = "none";
+        stopButton.style.display = "flex";
+        messageInput.disabled = true;
+        sendButton.disabled = true;
+ 
+        // Add user message
+        addMessage(message, true);
+        messageInput.value = "";
+ 
+        // Add assistant message
+        const assistantMessage = addMessage("", false);
+        console.log("assistantMessage", assistantMessage);
+ 
+        await streamFromAzureOpenAI(message, assistantMessage, widgetId);
+ 
+        messageInput.disabled = false;
+        sendButton.disabled = false;
+        sendButton.style.display = "flex";
+        stopButton.style.display = "none";
+        messageInput.focus();
+      }
+    }
+ 
+    sendButton.addEventListener("click", sendMessage);
+    messageInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+ 
+    // Hide dropdown when clicking outside
+    document.addEventListener("click", (event) => {
+      if (
+        !nameDropdown.contains(event.target) &&
+        event.target !== messageInput
+      ) {
+        nameDropdown.style.display = "none"; // Hide dropdown
+      }
+    });
+ 
+    stopButton.addEventListener("click", () => {
+      if (abortController) {
+        abortController.abort(); // Abort the ongoing fetch request
+        stopButton.style.display = "none"; // Hide the stop button after stopping the stream
+        console.log("Streaming process stopped.");
+      }
+    });
   }
  
   function addMessage(text, isSent) {
@@ -686,7 +685,9 @@
  
     if (!isSent) {
       messageDiv.innerHTML = `
-      <img src="${validatedLogo}" alt="Assistant" class="intellient-chat-avatar">
+      <img src="${
+        validatedLogo || DEFAULT_THEME.avatarFile
+      }" alt="Assistant" class="intellient-chat-avatar">
       <div class="intellient-message-content">
         ${
           text ||
