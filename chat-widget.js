@@ -45,18 +45,15 @@
     console.log("userMessage", userMessage);
     conversationHistory.push({ role: "user", content: userMessage });
     try {
-      const response = await fetch(
-        "https://intelli-widget-adminportal.azurewebsites.net/api/link-widget",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            userMessage,
-            widgetId,
-            conversationHistory,
-          }),
-          signal,
-        }
-      );
+      const response = await fetch("https://intelli-widget-adminportal.azurewebsites.net/api/link-widget", {
+        method: "POST",
+        body: JSON.stringify({
+          userMessage,
+          widgetId,
+          conversationHistory,
+        }),
+        signal,
+      });
  
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
