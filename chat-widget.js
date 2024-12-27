@@ -39,11 +39,17 @@
   let abortController = null;
   let conversationHistory = [];
   async function streamFromAzureOpenAI(userMessage, messageElement, widgetId) {
+ 
     abortController = new AbortController();
     const { signal } = abortController;
  
     console.log("userMessage", userMessage);
     conversationHistory.push({ role: "user", content: userMessage });
+    if (conversationHistory.length !== 0) {
+      const starterContainer = document.getElementById('starter-container');
+      starterContainer.style.display = "none";
+ 
+    }
     try {
       const response = await fetch("https://intelli-widget-adminportal.azurewebsites.net/api/link-widget", {
         method: "POST",
@@ -207,6 +213,33 @@
         flex-direction: column;
       }
    
+ 
+      .intellient-conversation-starters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px));
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid #ddd;
+  background: white;
+}
+ 
+.ellipsis-button {
+  padding: 8px 12px;
+  font-size: 12px;
+  text-align: center;
+  border-radius: 12px;
+  background-color:rgb(236, 236, 236);
+  color: black;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.3s;
+}
+ 
+.ellipsis-button:hover {
+  background-color:rgb(226, 226, 226);
+}
+ 
+     
       .intellient-chat-container.visible {
         display: flex;
       }
@@ -370,6 +403,13 @@
           DEFAULT_THEME.primaryButtonTextColor
         };
       }
+ 
+      #starter-container {
+  max-height: 200px; /* Adjust the height as needed */
+  overflow-y: auto; /* Add vertical scrolling */
+  margin-bottom: 10px; /* Add space below the container for welcome message */
+}
+ 
           .ask-intellient-title {
       display: block;
       font-size: 20px;
@@ -395,29 +435,7 @@
         height: 8px;
         background: #90949c;
         border-radius: 50%;
-        animation: typing-animation 1.4s ease-in-out;
-      }
- 
-      #name-dropdown {
-          display: none;
-          position: absolute;
-          background: white;
-          border: 1px solid #ccc;
-          border-radius: 4px;
-          z-index: 1000;
-          max-height: 200px;
-          overflow-y: auto;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      }
- 
-      #name-dropdown div {
-          padding: 10px;
-          cursor: pointer;
-          transition: background 0.3s;
-      }
- 
-      #name-dropdown div:hover {
-          background-color: #f0f0f0;
+        animation: typing-animation 1.4s ease-in-out infinite;
       }
  
       input {
@@ -436,8 +454,22 @@
           font-size: 10px;
           padding: 2px;
       }
- 
- 
+      .ellipsis-button {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: block;
+          width: 100%;
+          min-height: 30px;
+          font-size: 12px;
+          margin-bottom: 5px;
+          box-sizing: border-box;
+          background-color: #f9f9f9;
+          border: 1px solid #ddd;
+          border-radius: 5px;
+          cursor: pointer;
+          text-align: start;
+    }
    
       .intellient-typing-dot:nth-child(1) { animation-delay: 0s; }
       .intellient-typing-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -463,64 +495,85 @@
     const chatContainer = d.createElement("div");
     chatContainer.className =
       "intellient-widget-base intellient-chat-container";
-    chatContainer.innerHTML = `
-        <div class="intellient-chat-header">
+      chatContainer.innerHTML = `
+      <div class="intellient-chat-header">
+        <img src="${
+          validatedLogo || DEFAULT_THEME.avatarFile
+        }" alt="Assistant" class="intellient-chat-avatar">
+           <label class="ask-intellient-title">${
+             validationResponse.botName
+           }</label>
+        <div class="intellient-chat-close">
+          <svg viewBox="0 0 24 24">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
+          </svg>
+        </div>
+      </div>
+      <div class="intellient-chat-messages" id="intellientChatMessages">
+        <div class="intellient-chat-message received">
           <img src="${
             validatedLogo || DEFAULT_THEME.avatarFile
           }" alt="Assistant" class="intellient-chat-avatar">
-             <label class="ask-intellient-title">${
-               validationResponse.botName
-             }</label>
-          <div class="intellient-chat-close">
+          <div class="intellient-message-content">${
+            validationResponse.greeting || DEFAULT_THEME.greeting
+          }</div>
+          <div class="intellient-timestamp">${new Date().toLocaleTimeString(
+            [],
+            {
+              hour: "numeric",
+              minute: "2-digit",
+            }
+          )}</div>
+        </div>
+      </div>  
+      <div id="starter-container" class="intellient-conversation-starters">
+  <!-- Conversation starters will be appended here -->
+</div>
+      <div id="tag-container" style="display: flex; flex-wrap; wrap; gap: 5px; margin-bottom: 10px;"></div>
+      <div class="intellient-chat-input">
+        <input type="text" id="intellientChatInput" placeholder="Type a message..." autocomplete="off">
+        <div class="tooltip-container">
+          <button id="intellientChatSend">
             <svg viewBox="0 0 24 24">
-              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
             </svg>
-          </div>
-        </div>
-        <div class="intellient-chat-messages" id="intellientChatMessages">
-          <div class="intellient-chat-message received">
-            <img src="${
-              validatedLogo || DEFAULT_THEME.avatarFile
-            }" alt="Assistant" class="intellient-chat-avatar">
-            <div class="intellient-message-content">${
-              validationResponse.greeting || DEFAULT_THEME.greeting
-            }</div>
-            <div class="intellient-timestamp">${new Date().toLocaleTimeString(
-              [],
-              {
-                hour: "numeric",
-                minute: "2-digit",
-              }
-            )}</div>
-          </div>
-        </div>
-       
-                <div id="name-dropdown" style="display: none; position: absolute; background: white; border: 1px solid #ccc; z-index: 1000;"></div>
- 
-                <div id="tag-container" style="display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px;"></div>
- 
-        <div class="intellient-chat-input">
-          <input type="text" id="intellientChatInput" placeholder="Type a message...">
-       <div class="tooltip-container">
-      <button id="intellientChatSend">
-        <svg viewBox="0 0 24 24">
-          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-        </svg>
-      </button>
-      <div id="tooltip" class="tooltip">Long press to activate voice chat</div>
-    </div>
-             <button id="intellientChatStop">
-           <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
-        <circle cx="12" cy="12" r="10" fill="red" />
-        <rect x="7" y="7" width="10" height="10" fill="white" />
-      </svg>
           </button>
+          <div id="tooltip" class="tooltip">Long press to activate voice chat</div>
         </div>
-      `;
+        <button id="intellientChatStop">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+            <circle cx="12" cy="12" r="10" fill="red" />
+            <rect x="7" y="7" width="10" height="10" fill="white" />
+          </svg>
+        </button>
+      </div>
+    `;
  
-    // Add elements to page
-    d.body.appendChild(launcher);
-    d.body.appendChild(chatContainer);
+// Add elements to page
+d.body.appendChild(launcher);
+d.body.appendChild(chatContainer);
+console.log("conversationHistory", conversationHistory);
+ 
+if (conversationHistory.length === 0) {
+  const starterContainer = document.getElementById('starter-container');
+  validationResponse.conversationStarters.forEach(starter => {
+    const button = document.createElement('button');
+    button.id = `intellientChatClickable${starter.id}`;
+    button.className = 'ellipsis-button';
+    button.textContent = starter.description;
+    button.title = `${starter.description}`;
+    button.addEventListener('click', () => {
+      const userMessage = starter.description;
+      sendMessage(userMessage);
+ 
+      // Optionally hide starters after click
+      starterContainer.style.display = "none";
+    });
+    starterContainer.appendChild(button);
+  });
+}
+ 
+ 
  
     // Add event listeners
     launcher.addEventListener("click", () => {
@@ -538,7 +591,6 @@
  
     // Setup message handling
     const messageInput = d.getElementById("intellientChatInput");
-    const nameDropdown = document.getElementById("name-dropdown");
     const sendButton = d.getElementById("intellientChatSend");
     const stopButton = d.getElementById("intellientChatStop");
     stopButton.style.display = "none";
@@ -569,7 +621,7 @@
       };
  
       recognition.onend = () => {
-        sendMessage();
+        sendMessage("");
         resetSendButton();
         console.log("Voice recognition ended.");
       };
@@ -603,9 +655,8 @@
       // resetSendButton();
     };
  
-    async function sendMessage() {
+    async function sendMessage(userMessage) {
       console.log("enetered");
- 
       let intellibotName = "";
       const tagContainer = document.getElementById("tag-container");
       const tags = tagContainer.getElementsByClassName("tag");
@@ -613,7 +664,7 @@
         intellibotName = tags[0].textContent.slice(1);
       }
  
-      const message = messageInput.value.trim();
+      const message = messageInput.value.trim() || userMessage;
       console.log("messages", message);
       console.log("intellibotName", intellibotName);
  
@@ -646,16 +697,6 @@
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
-      }
-    });
- 
-    // Hide dropdown when clicking outside
-    document.addEventListener("click", (event) => {
-      if (
-        !nameDropdown.contains(event.target) &&
-        event.target !== messageInput
-      ) {
-        nameDropdown.style.display = "none"; // Hide dropdown
       }
     });
  
