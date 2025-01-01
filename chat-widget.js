@@ -51,7 +51,7 @@
  
     }
     try {
-      const response = await fetch("https://intelli-widget-adminportal.azurewebsites.net/api/link-widget", {
+      const response = await fetch("http://localhost:3000/api/link-widget", {
         method: "POST",
         body: JSON.stringify({
           userMessage,
@@ -143,7 +143,7 @@
     console.log("widgetId", widgetId);
  
     const response = await fetch(
-      "https://intelli-widget-adminportal.azurewebsites.net/api/link-widget/widget-validations",
+      "http://localhost:3000/api/link-widget/widget-validations",
       {
         method: "POST",
         body: JSON.stringify({
@@ -497,12 +497,8 @@
       "intellient-widget-base intellient-chat-container";
       chatContainer.innerHTML = `
       <div class="intellient-chat-header">
-        <img src="${
-          validatedLogo || DEFAULT_THEME.avatarFile
-        }" alt="Assistant" class="intellient-chat-avatar">
-           <label class="ask-intellient-title">${
-             validationResponse.botName
-           }</label>
+        <img src="${validatedLogo || DEFAULT_THEME.avatarFile}" alt="Assistant" class="intellient-chat-avatar">
+        <label class="ask-intellient-title">${validationResponse.botName}</label>
         <div class="intellient-chat-close">
           <svg viewBox="0 0 24 24">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
@@ -511,31 +507,20 @@
       </div>
       <div class="intellient-chat-messages" id="intellientChatMessages">
         <div class="intellient-chat-message received">
-          <img src="${
-            validatedLogo || DEFAULT_THEME.avatarFile
-          }" alt="Assistant" class="intellient-chat-avatar">
-          <div class="intellient-message-content">${
-            validationResponse.greeting || DEFAULT_THEME.greeting
-          }</div>
-          <div class="intellient-timestamp">${new Date().toLocaleTimeString(
-            [],
-            {
-              hour: "numeric",
-              minute: "2-digit",
-            }
-          )}</div>
+          <img src="${validatedLogo || DEFAULT_THEME.avatarFile}" alt="Assistant" class="intellient-chat-avatar">
+          <div class="intellient-message-content">${validationResponse.greeting || DEFAULT_THEME.greeting}</div>
+          <div class="intellient-timestamp">${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</div>
         </div>
       </div>  
       <div id="starter-container" class="intellient-conversation-starters">
-  <!-- Conversation starters will be appended here -->
-</div>
+      </div>
       <div id="tag-container" style="display: flex; flex-wrap; wrap; gap: 5px; margin-bottom: 10px;"></div>
       <div class="intellient-chat-input">
         <input type="text" id="intellientChatInput" placeholder="Type a message..." autocomplete="off">
         <div class="tooltip-container">
           <button id="intellientChatSend">
-            <svg viewBox="0 0 24 24">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+              <path d="M12 15c1.66 0 3-1.34 3-3V6a3 3 0 0 0-6 0v6c0 1.66 1.34 3 3 3zm4.3-3c0 2.38-1.88 4.3-4.3 4.3S7.7 14.38 7.7 12H6.1c0 3.15 2.41 5.75 5.5 6.3v3h1.8v-3c3.09-.55 5.5-3.15 5.5-6.3h-1.6z" />
             </svg>
           </button>
           <div id="tooltip" class="tooltip">Long press to activate voice chat</div>
@@ -655,51 +640,119 @@ if (conversationHistory.length === 0) {
       // resetSendButton();
     };
  
-    async function sendMessage(userMessage) {
-      console.log("enetered");
-      let intellibotName = "";
-      const tagContainer = document.getElementById("tag-container");
-      const tags = tagContainer.getElementsByClassName("tag");
-      if (tags.length !== 0) {
-        intellibotName = tags[0].textContent.slice(1);
-      }
- 
-      const message = messageInput.value.trim() || userMessage;
-      console.log("messages", message);
-      console.log("intellibotName", intellibotName);
- 
-      if (message) {
-        sendButton.style.display = "none";
-        stopButton.style.display = "flex";
-        messageInput.disabled = true;
-        sendButton.disabled = true;
- 
-        // Add user message
-        addMessage(message, true);
-        messageInput.value = "";
- 
-        // Add assistant message
-        const assistantMessage = addMessage("", false);
-        console.log("assistantMessage", assistantMessage);
- 
-        await streamFromAzureOpenAI(message, assistantMessage, widgetId);
- 
-        messageInput.disabled = false;
-        sendButton.disabled = false;
-        sendButton.style.display = "flex";
-        stopButton.style.display = "none";
-        messageInput.focus();
+    let isFirstLoad = true; // Flag to track initial load
+
+    // Function to switch between mic and send icons based on input
+  function toggleSendButton() {
+    if (messageInput.value.trim().length > 0) {
+      // Show send icon when there's text
+      sendButton.innerHTML = `
+        <svg viewBox="0 0 24 24">
+          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+        </svg>`;
+    } else {
+      // Show mic icon when input is empty
+      sendButton.innerHTML = `
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+          <path d="M12 15c1.66 0 3-1.34 3-3V6a3 3 0 0 0-6 0v6c0 1.66 1.34 3 3 3zm4.3-3c0 2.38-1.88 4.3-4.3 4.3S7.7 14.38 7.7 12H6.1c0 3.15 2.41 5.75 5.5 6.3v3h1.8v-3c3.09-.55 5.5-3.15 5.5-6.3h-1.6z" />
+        </svg>`;
+    }
+  }
+
+  async function sendMessage(userMessage) {
+    console.log("entered");
+    let intellibotName = "";
+    const tagContainer = document.getElementById("tag-container");
+    const tags = tagContainer.getElementsByClassName("tag");
+    if (tags.length !== 0) {
+      intellibotName = tags[0].textContent.slice(1);
+    }
+
+    const message = messageInput.value.trim() || userMessage;
+    console.log("messages", message);
+    console.log("intellibotName", intellibotName);
+
+    // Check if message is empty or only whitespace
+    if (message && message.length > 0) {
+      sendButton.style.display = "none";
+      stopButton.style.display = "flex";
+      messageInput.disabled = true;
+      sendButton.disabled = true;
+
+      // Add user message
+      addMessage(message, true);
+      messageInput.value = "";
+
+      // Add assistant message
+      const assistantMessage = addMessage("", false);
+      console.log("assistantMessage", assistantMessage);
+
+      await streamFromAzureOpenAI(message, assistantMessage, widgetId);
+
+      messageInput.disabled = false;
+      sendButton.disabled = false;
+      sendButton.style.display = "flex";
+      stopButton.style.display = "none";
+      messageInput.focus();
+      
+      // Update button to show mic icon since input is now empty
+      toggleSendButton();
+    }
+  }
+
+  // Add input event listener to toggle button icon
+  messageInput.addEventListener("input", toggleSendButton);
+
+  // Clear input handler
+  messageInput.addEventListener("change", function() {
+    if (this.value.trim() === '') {
+      toggleSendButton();
+    }
+  });
+
+  sendButton.addEventListener("click", () => {
+    // Only send message if input is not empty
+    if (messageInput.value.trim().length > 0) {
+      sendMessage();
+    }
+  });
+
+  messageInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      // Only send message if input is not empty
+      if (messageInput.value.trim().length > 0) {
+        sendMessage();
       }
     }
- 
-    sendButton.addEventListener("click", sendMessage);
-    messageInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
+  });
+
+  // Initialize with mic icon
+  toggleSendButton();
+  
+    sendButton.addEventListener("click", () => {
+      // Only send message if input is not empty
+      if (messageInput.value.trim().length > 0) {
         sendMessage();
       }
     });
+  
+    messageInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        // Only send message if input is not empty
+        if (messageInput.value.trim().length > 0) {
+          sendMessage();
+        }
+      }
+    });
+  
+    // Initialize with mic icon on first load
+    toggleSendButton();
  
+
+
+
     stopButton.addEventListener("click", () => {
       if (abortController) {
         abortController.abort(); // Abort the ongoing fetch request
@@ -708,6 +761,8 @@ if (conversationHistory.length === 0) {
       }
     });
   }
+
+  
  
   function addMessage(text, isSent) {
     const container = d.getElementById("intellientChatMessages");
