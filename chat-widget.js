@@ -80,7 +80,7 @@
     }
 
     try {
-      const response = await fetch("http://localhost:3000/api/link-widget", {
+      const response = await fetch("https://intelli-widget-adminportal.azurewebsites.net/api/link-widget", {
         method: "POST",
         body: JSON.stringify({
           userMessage,
@@ -159,7 +159,7 @@
     console.log("widgetId", widgetId);
 
     const response = await fetch(
-      "http://localhost:3000/api/link-widget/widget-validations",
+      "https://intelli-widget-adminportal.azurewebsites.net/api/link-widget/widget-validations",
       {
         method: "POST",
         body: JSON.stringify({
