@@ -530,7 +530,7 @@
             </button>
             <div id="tooltip" class="tooltip">Long press to activate voice chat</div>
           </div>
-          <button id="intellientChatStop">
+          <button id="intellientChatStop" style="height: 45px;">
             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
               <circle cx="12" cy="12" r="10" fill="red" />
               <rect x="7" y="7" width="10" height="10" fill="white" />
