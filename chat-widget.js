@@ -493,7 +493,7 @@
       launcher.className = "intellient-widget-base intellient-chat-launcher";
       // Initial logo setter
       // launcher.innerHTML = `<img src="${validatedLogo || DEFAULT_THEME.avatarFile}" alt="Chat">`;
-      launcher.innerHTML = `<img src="${'/widget/Initial_logo.png'}" alt="Chat">`;
+      launcher.innerHTML = `<img src="${'https://intelli-widget-app.azurewebsites.net/initial_logo.png'}" alt="Chat">`;
 
       
 
