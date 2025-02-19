@@ -212,8 +212,8 @@
         }
 
         .intellient-chat-launcher img {
-          width: 40px;
-          height: 40px;
+          width: 30px;
+          height: 30px;
           border-radius: 50%;
         }
 
@@ -260,7 +260,8 @@
         }
 
         .intellient-chat-header {
-          padding: 16px;
+          padding: 8px;
+          padding-left: 18px;
           background: ${validationResponse.brandingColor || DEFAULT_THEME.brandingColor};
           color: white;
           border-radius: 12px 12px 0 0;
@@ -356,13 +357,14 @@
         .intellient-chat-message.received {
           background: rgb(236, 236, 236);
           align-self: flex-start;
-          border-bottom-left-radius: 4px;
+          border-radius: 4px;
         }
 
         .intellient-chat-message.sent {
-          background: white;
+          background:rgb(4, 155, 255);
+          color: white;
           align-self: flex-end;
-          border-bottom-right-radius: 4px;
+          border-radius: 4px;
         }
 
         .intellient-chat-input {
@@ -420,8 +422,7 @@
         }
 
         .intellient-timestamp {
-          font-size: 12px;
-          color: #65676b;
+          font-size: 12px; 
           margin-top: 4px;
           text-align: right;
         }
@@ -469,7 +470,7 @@
           box-sizing: border-box;
           background-color: #f9f9f9;
           border: 1px solid #ddd;
-          border-radius: 5px;
+          border-radius: 15px;
           cursor: pointer;
           text-align: start;
         }
@@ -490,14 +491,20 @@
 
       const launcher = d.createElement("div");
       launcher.className = "intellient-widget-base intellient-chat-launcher";
-      launcher.innerHTML = `<img src="${validatedLogo || DEFAULT_THEME.avatarFile}" alt="Chat">`;
+      // Initial logo setter
+      // launcher.innerHTML = `<img src="${validatedLogo || DEFAULT_THEME.avatarFile}" alt="Chat">`;
+      launcher.innerHTML = `<img src="${'/widget/Initial_logo.png'}" alt="Chat">`;
+
+      
 
       const chatContainer = d.createElement("div");
       chatContainer.className = "intellient-widget-base intellient-chat-container";
       chatContainer.innerHTML = `
         <div class="intellient-chat-header">
+        <div flex="1" style="display: flex; align-items: center;">
           <img src="${validatedLogo || DEFAULT_THEME.avatarFile}" alt="Assistant" class="intellient-chat-avatar">
           <label class="ask-intellient-title">${validationResponse.botName}</label>
+        </div>
           <div class="intellient-chat-close">
             <svg viewBox="0 0 24 24">
               <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
@@ -506,9 +513,8 @@
         </div>
         <div class="intellient-chat-messages" id="intellientChatMessages">
           <div class="intellient-chat-message received">
-            <img src="${validatedLogo || DEFAULT_THEME.avatarFile}" alt="Assistant" class="intellient-chat-avatar">
+            
             <div class="intellient-message-content">${validationResponse.greeting || DEFAULT_THEME.greeting}</div>
-            <div class="intellient-timestamp">${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</div>
           </div>
         </div>  
         <div id="starter-container" class="intellient-conversation-starters">
@@ -725,7 +731,7 @@
 
         if (!isSent) {
           messageDiv.innerHTML = `
-            <img src="${validatedLogo || DEFAULT_THEME.avatarFile}" alt="Assistant" class="intellient-chat-avatar">
+            
             <div class="intellient-message-content">
               ${text || `<div class="intellient-typing-indicator">
                 <div class="intellient-typing-dot"></div>
@@ -733,12 +739,12 @@
                 <div class="intellient-typing-dot"></div>
               </div>`}
             </div>
-            <div class="intellient-timestamp">${timestamp}</div>
+          
           `;
         } else {
           messageDiv.innerHTML = `
             <div class="intellient-message-content">${text}</div>
-            <div class="intellient-timestamp">${timestamp}</div>
+         
           `;
         }
 
