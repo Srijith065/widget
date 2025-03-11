@@ -535,42 +535,41 @@
       const chatContainer = d.createElement("div");
       chatContainer.className = "intellient-widget-base intellient-chat-container";
       chatContainer.innerHTML = `
-        <div class="intellient-chat-header">
-        <div flex="1" style="display: flex; align-items: center;">
-          <img src="${validatedLogo || DEFAULT_THEME.avatarFile}" alt="Assistant" class="intellient-chat-avatar">
-          <label class="ask-intellient-title">${validationResponse.botName}</label>
-        </div>
-          <div class="intellient-chat-close">
-            <svg viewBox="0 0 24 24">
-              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
-            </svg>
-          </div>
-        </div>
-        <div id="image-container">
-          <img src="widgetBot.png" alt="Image">
-          <div class="greeting-message">${validationResponse.greeting || DEFAULT_THEME.greeting}</div>
-        </div>
-        <div class="intellient-chat-messages" id="intellientChatMessages"></div>  
-        <div id="starter-container" class="intellient-conversation-starters">
-        </div>
-        <div id="tag-container" style="display: flex; flex-wrap; wrap; gap: 5px; margin-bottom: 10px;"></div>
-        <div class="intellient-chat-input">
-          <input type="text" id="intellientChatInput" placeholder="Type a message..." autocomplete="off">
-          <div class="tooltip-container">
-            <button id="intellientChatSend">
-              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
-                <path d="M12 15c1.66 0 3-1.34 3-3V6a3 3 0 0 0-6 0v6c0 1.66 1.34 3 3 3zm4.3-3c0 2.38-1.88 4.3-4.3 4.3S7.7 14.38 7.7 12H6.1c0 3.15 2.41 5.75 5.5 6.3v3h1.8v-3c3.09-.55 5.5-3.15 5.5-6.3h-1.6z" />
-              </svg>
-            </button>
-            <div id="tooltip" class="tooltip">Long press to activate voice chat</div>
-          </div>
-          <button id="intellientChatStop" style="height: 45px;">
-            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
-    <rect x="5" y="5" width="15" height="15" fill="white" />
-  </svg>
-</button>
-
-        </div>
+  <div class="intellient-chat-header">
+    <div flex="1" style="display: flex; align-items: center;">
+      <img src="${validatedLogo || DEFAULT_THEME.avatarFile}" alt="Assistant" class="intellient-chat-avatar">
+      <label class="ask-intellient-title">${validationResponse.botName}</label>
+    </div>
+    <div class="intellient-chat-close">
+      <svg viewBox="0 0 24 24">
+        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/>
+      </svg>
+    </div>
+  </div>
+  <div id="image-container">
+    <img src="https://raw.githubusercontent.com/Srijith065/widget/chatWidgetWebApp/widgetBot.png" alt="Image">
+    <div class="greeting-message">${validationResponse.greeting || DEFAULT_THEME.greeting}</div>
+  </div>
+  <div class="intellient-chat-messages" id="intellientChatMessages"></div>  
+  <div id="starter-container" class="intellient-conversation-starters">
+  </div>
+  <div id="tag-container" style="display: flex; flex-wrap; wrap; gap: 5px; margin-bottom: 10px;"></div>
+  <div class="intellient-chat-input">
+    <input type="text" id="intellientChatInput" placeholder="Type a message..." autocomplete="off">
+    <div class="tooltip-container">
+      <button id="intellientChatSend">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+          <path d="M12 15c1.66 0 3-1.34 3-3V6a3 3 0 0 0-6 0v6c0 1.66 1.34 3 3 3zm4.3-3c0 2.38-1.88 4.3-4.3 4.3S7.7 14.38 7.7 12H6.1c0 3.15 2.41 5.75 5.5 6.3v3h1.8v-3c3.09-.55 5.5-3.15 5.5-6.3h-1.6z" />
+        </svg>
+      </button>
+      <div id="tooltip" class="tooltip">Long press to activate voice chat</div>
+    </div>
+    <button id="intellientChatStop" style="height: 45px;">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+        <rect x="5" y="5" width="15" height="15" fill="white" />
+      </svg>
+    </button>
+  </div>
       `;
 
       d.body.appendChild(launcher);
