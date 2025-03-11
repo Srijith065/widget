@@ -49,7 +49,7 @@
   console.log(" window.location.href", window.location.href);
 
   const DEFAULT_THEME = {
-    greeting: "Hello! How can I help you today?",
+    greeting: "Hi! How can I help you today?",
     avatarFile: "https://delightful-beach-07c9da51e.5.azurestaticapps.net/widget-logo.png",
     brandingColor: "#3B82F6",
     primaryButtonColor: "#10B981",
@@ -77,8 +77,11 @@
     if (conversationHistory.length !== 0) {
       const starterContainer = document.getElementById('starter-container');
       starterContainer.style.display = "none";
+      const imageContainer = document.getElementById('image-container');
+      if (imageContainer) {
+        imageContainer.style.display = "none";
+      }
     }
-
     try {
       const response = await fetch("https://intelli-widget-adminportal.azurewebsites.net/api/link-widget", {
         method: "POST",
@@ -235,7 +238,6 @@
           grid-template-columns: repeat(auto-fit, minmax(150px));
           gap: 8px;
           padding: 8px;
-          border-top: 1px solid #ddd;
           background: white;
         }
 
@@ -411,7 +413,7 @@
         #starter-container {
           max-height: 200px;
           overflow-y: auto;
-          margin-bottom: 10px;
+          margin-bottom: -21px;
         }
 
         .ask-intellient-title {
@@ -466,10 +468,11 @@
           width: 100%;
           min-height: 30px;
           font-size: 12px;
+          color: #262626;
           margin-bottom: 5px;
           box-sizing: border-box;
-          background-color: #f9f9f9;
-          border: 1px solid #ddd;
+          background-color:rgb(243, 243, 243);
+          border: transparent;
           border-radius: 15px;
           cursor: pointer;
           text-align: start;
@@ -483,6 +486,42 @@
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-5px); }
         }
+
+        #image-container {
+    width: 300.82px;
+    height: 112px;
+    position: absolute;
+    top: 146.62px;
+    left: 22.9px;
+    border-radius: 15px;
+    display: flex;
+    align-items: start;
+    justify-content: center;
+    background: linear-gradient(0deg, rgb(253 253 254), rgb(234 243 255)); /* Gradient background */
+    flex-direction: column;
+    gap: 10px;
+}
+
+
+        #image-container img {
+          width: 114.11px;
+          height: 134.11px;
+          position: absolute;
+          top: -80px;
+          left: 16.2px;
+        }
+
+       #image-container .greeting-message {
+    font-size: 15px;
+    font-weight: bold; /* Optional: Helps gradient appear more clearly */
+    margin-top: 45px;
+    margin-left: 17px;
+    background: linear-gradient(45deg, #E32FAB, #2F8DED);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-block; /* Ensures background gradient applies correctly */
+}
+
       `;
 
       const styleSheet = d.createElement("style");
@@ -491,11 +530,7 @@
 
       const launcher = d.createElement("div");
       launcher.className = "intellient-widget-base intellient-chat-launcher";
-      // Initial logo setter
-      // launcher.innerHTML = `<img src="${validatedLogo || DEFAULT_THEME.avatarFile}" alt="Chat">`;
       launcher.innerHTML = `<img src="${'https://intelli-widget-app.azurewebsites.net/initial_logo.png'}" alt="Chat">`;
-
-      
 
       const chatContainer = d.createElement("div");
       chatContainer.className = "intellient-widget-base intellient-chat-container";
@@ -511,12 +546,11 @@
             </svg>
           </div>
         </div>
-        <div class="intellient-chat-messages" id="intellientChatMessages">
-          <div class="intellient-chat-message received">
-            
-            <div class="intellient-message-content">${validationResponse.greeting || DEFAULT_THEME.greeting}</div>
-          </div>
-        </div>  
+        <div id="image-container">
+          <img src="widgetBot.png" alt="Image">
+          <div class="greeting-message">${validationResponse.greeting || DEFAULT_THEME.greeting}</div>
+        </div>
+        <div class="intellient-chat-messages" id="intellientChatMessages"></div>  
         <div id="starter-container" class="intellient-conversation-starters">
         </div>
         <div id="tag-container" style="display: flex; flex-wrap; wrap; gap: 5px; margin-bottom: 10px;"></div>
@@ -532,10 +566,10 @@
           </div>
           <button id="intellientChatStop" style="height: 45px;">
             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
-              <circle cx="12" cy="12" r="10" fill="red" />
-              <rect x="7" y="7" width="10" height="10" fill="white" />
-            </svg>
-          </button>
+    <rect x="5" y="5" width="15" height="15" fill="white" />
+  </svg>
+</button>
+
         </div>
       `;
 
@@ -555,6 +589,10 @@
             const userMessage = starter.description;
             sendMessage(userMessage);
             starterContainer.style.display = "none";
+            const imageContainer = document.getElementById('image-container');
+            if (imageContainer) {
+              imageContainer.style.display = "none";
+            }
           });
           starterContainer.appendChild(button);
         });
